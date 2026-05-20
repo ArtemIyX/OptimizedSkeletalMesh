@@ -14,7 +14,8 @@ enum class EOptimizedSkeletalMeshDrawMode : uint8
 {
 	DynamicMeshProof UMETA(DisplayName = "Dynamic Mesh Proof"),
 	DirectMeshPerInstance UMETA(DisplayName = "Direct Mesh Per Instance"),
-	DirectMeshInstanced UMETA(DisplayName = "Direct Mesh Instanced")
+	DirectMeshInstanced UMETA(DisplayName = "Direct Mesh Instanced"),
+	GpuSkinnedInstanced UMETA(DisplayName = "GPU Skinned Instanced")
 };
 
 USTRUCT(BlueprintType)
@@ -69,6 +70,30 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderStats
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
 	int32 SkinningGPUPaletteUploads = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningSkinWeightLODs = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningSkinWeightVertices = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningMaxBoneInfluences = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningSkinWeight16BitIndexLODs = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningSkinWeight16BitWeightLODs = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningMissingSkinWeightLODs = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningGPUSkinReadyLODs = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningGPUSkinFallbackDraws = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
 	TArray<int32> VisibleInstancesByLOD;

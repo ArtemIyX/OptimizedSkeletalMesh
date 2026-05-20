@@ -18,7 +18,7 @@
 		{
 			"Name": "OptimizedSkeletalMesh",
 			"Type": "Runtime",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "PostConfigInit"
 		}
 	]
 }

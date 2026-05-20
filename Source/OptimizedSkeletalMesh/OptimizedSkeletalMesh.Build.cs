@@ -37,6 +37,7 @@ public class OptimizedSkeletalMesh : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
+				"Projects",
 				"Slate",
 				"SlateCore",
 				// ... add private dependencies that you statically link with here ...	

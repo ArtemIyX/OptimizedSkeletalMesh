@@ -2,11 +2,20 @@
 
 #include "OptimizedSkeletalMesh.h"
 
+#include "Interfaces/IPluginManager.h"
+#include "ShaderCore.h"
+
 #define LOCTEXT_NAMESPACE "FOptimizedSkeletalMeshModule"
 
 void FOptimizedSkeletalMeshModule::StartupModule()
 {
-	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
+	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("OptimizedSkeletalMesh"));
+	if (Plugin.IsValid())
+	{
+		AddShaderSourceDirectoryMapping(
+			TEXT("/Plugin/OptimizedSkeletalMesh"),
+			FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders")));
+	}
 }
 
 void FOptimizedSkeletalMeshModule::ShutdownModule()

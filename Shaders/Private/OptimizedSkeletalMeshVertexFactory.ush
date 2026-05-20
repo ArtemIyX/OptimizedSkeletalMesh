@@ -1,0 +1,8 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#pragma once
+
+// Stage 1: share LocalVertexFactory behavior while the C++ side gets a
+// dedicated vertex factory type and shader permutation path. Skinning-specific
+// inputs will be layered here next.
+#include "/Engine/Private/LocalVertexFactory.ush"
