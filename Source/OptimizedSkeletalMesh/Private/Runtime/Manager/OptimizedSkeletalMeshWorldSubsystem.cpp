@@ -142,6 +142,42 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceVisible(
 	return true;
 }
 
+bool UOptimizedSkeletalMeshWorldSubsystem::ShowInstance(const FOptimizedSkeletalMeshInstanceHandle Handle)
+{
+	return SetInstanceVisible(Handle, true);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::HideInstance(const FOptimizedSkeletalMeshInstanceHandle Handle)
+{
+	return SetInstanceVisible(Handle, false);
+}
+
+int32 UOptimizedSkeletalMeshWorldSubsystem::SetInstancesVisible(
+	const TArray<FOptimizedSkeletalMeshInstanceHandle>& Handles,
+	const bool bVisible)
+{
+	int32 UpdatedCount = 0;
+
+	for (const FOptimizedSkeletalMeshInstanceHandle& Handle : Handles)
+	{
+		FOptimizedSkeletalMeshInstanceDesc* Instance = Instances.Find(Handle.Id);
+		if (!Instance || Instance->bVisible == bVisible)
+		{
+			continue;
+		}
+
+		Instance->bVisible = bVisible;
+		++UpdatedCount;
+	}
+
+	if (UpdatedCount > 0)
+	{
+		MarkRenderDataDirty();
+	}
+
+	return UpdatedCount;
+}
+
 bool UOptimizedSkeletalMeshWorldSubsystem::GetInstance(
 	FOptimizedSkeletalMeshInstanceHandle Handle,
 	FOptimizedSkeletalMeshInstanceDesc& OutDesc) const
@@ -167,6 +203,12 @@ void UOptimizedSkeletalMeshWorldSubsystem::GetInstancesSnapshot(
 		Snapshot.Handle = FOptimizedSkeletalMeshInstanceHandle(Pair.Key);
 		Snapshot.Desc = Pair.Value;
 	}
+
+	OutInstances.Sort(
+		[](const FOptimizedSkeletalMeshInstanceSnapshot& Left, const FOptimizedSkeletalMeshInstanceSnapshot& Right)
+		{
+			return Left.Handle.Id < Right.Handle.Id;
+		});
 }
 
 int32 UOptimizedSkeletalMeshWorldSubsystem::GetInstanceCount() const

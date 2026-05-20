@@ -3,6 +3,7 @@
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 
 #include "DynamicMeshBuilder.h"
+#include "ConvexVolume.h"
 #include "Engine/Engine.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -119,14 +120,112 @@ namespace OptimizedSkeletalMesh
 		TArray<TUniquePtr<FLODResources>> LODResources;
 	};
 
+	static const FSkeletalMeshLODRenderData* GetLODRenderData(const USkeletalMesh* SkeletalMesh, int32 LODIndex);
+
 	static FBox GetInstanceWorldBounds(const FOptimizedSkeletalMeshInstanceDesc& Desc)
 	{
 		if (Desc.SkeletalMesh)
 		{
+			FBox LocalRenderBounds(ForceInit);
+			if (const FSkeletalMeshLODRenderData* LODRenderData = GetLODRenderData(Desc.SkeletalMesh, 0))
+			{
+				const FPositionVertexBuffer& PositionVertexBuffer = LODRenderData->StaticVertexBuffers.PositionVertexBuffer;
+				const uint32 NumVertices = PositionVertexBuffer.GetNumVertices();
+				for (uint32 VertexIndex = 0; VertexIndex < NumVertices; ++VertexIndex)
+				{
+					LocalRenderBounds += static_cast<FVector>(PositionVertexBuffer.VertexPosition(VertexIndex));
+				}
+			}
+
+			if (LocalRenderBounds.IsValid)
+			{
+				return LocalRenderBounds.TransformBy(Desc.WorldTransform);
+			}
+
 			return Desc.SkeletalMesh->GetBounds().GetBox().TransformBy(Desc.WorldTransform);
 		}
 
 		return FBox::BuildAABB(Desc.WorldTransform.GetLocation(), FVector(FallbackInstanceExtent));
+	}
+
+	static bool DoesClipSpaceBoxIntersectView(const FSceneView& View, const FBox& WorldBounds)
+	{
+		if (!WorldBounds.IsValid)
+		{
+			return false;
+		}
+
+		const FVector Min = WorldBounds.Min;
+		const FVector Max = WorldBounds.Max;
+		const FVector Corners[] =
+		{
+			FVector(Min.X, Min.Y, Min.Z),
+			FVector(Min.X, Min.Y, Max.Z),
+			FVector(Min.X, Max.Y, Min.Z),
+			FVector(Min.X, Max.Y, Max.Z),
+			FVector(Max.X, Min.Y, Min.Z),
+			FVector(Max.X, Min.Y, Max.Z),
+			FVector(Max.X, Max.Y, Min.Z),
+			FVector(Max.X, Max.Y, Max.Z),
+		};
+
+		const FMatrix& ViewProjectionMatrix = View.ViewMatrices.GetViewProjectionMatrix();
+		bool bAllLeft = true;
+		bool bAllRight = true;
+		bool bAllBelow = true;
+		bool bAllAbove = true;
+		bool bAllBehindNear = true;
+
+		for (const FVector& Corner : Corners)
+		{
+			const FVector4 ClipPosition = ViewProjectionMatrix.TransformFVector4(FVector4(Corner, 1.0));
+			const float ClipW = static_cast<float>(ClipPosition.W);
+
+			if (ClipW <= UE_SMALL_NUMBER)
+			{
+				bAllBehindNear = false;
+				continue;
+			}
+
+			bAllLeft &= ClipPosition.X < -ClipW;
+			bAllRight &= ClipPosition.X > ClipW;
+			bAllBelow &= ClipPosition.Y < -ClipW;
+			bAllAbove &= ClipPosition.Y > ClipW;
+			bAllBehindNear = false;
+		}
+
+		return !(bAllLeft || bAllRight || bAllBelow || bAllAbove || bAllBehindNear);
+	}
+
+	static FBox GetCullTestBounds(const FRenderInstance& Instance, const float InstanceCullBoundsScale)
+	{
+		if (!Instance.WorldBounds.IsValid)
+		{
+			return FBox(ForceInit);
+		}
+
+		return FBox::BuildAABB(
+			Instance.WorldBounds.GetCenter(),
+			Instance.WorldBounds.GetExtent() * FMath::Max(1.0f, InstanceCullBoundsScale));
+	}
+
+	static bool IsInstanceVisibleInView(
+		const FSceneView& View,
+		const FRenderInstance& Instance,
+		const bool bEnableInstanceFrustumCulling,
+		const float InstanceCullBoundsScale)
+	{
+		if (!bEnableInstanceFrustumCulling)
+		{
+			return true;
+		}
+
+		if (!Instance.WorldBounds.IsValid)
+		{
+			return false;
+		}
+
+		return DoesClipSpaceBoxIntersectView(View, GetCullTestBounds(Instance, InstanceCullBoundsScale));
 	}
 
 	static FColor GetBatchDebugColor(const int32 BatchIndex)
@@ -379,6 +478,10 @@ public:
 		, bDrawMeshSections(Component->ShouldDrawMeshSections())
 		, MeshDrawMode(Component->GetMeshDrawMode())
 		, MaxMeshDrawInstances(Component->GetMaxMeshDrawInstances())
+		, bEnableInstanceFrustumCulling(Component->ShouldEnableInstanceFrustumCulling())
+		, InstanceCullBoundsScale(Component->GetInstanceCullBoundsScale())
+		, bDrawCullingDebug(Component->ShouldDrawCullingDebug())
+		, bDrawCullTestBounds(Component->ShouldDrawCullTestBounds())
 	{
 		if (const UWorld* World = Component->GetWorld())
 		{
@@ -480,6 +583,39 @@ public:
 			{
 				for (const OptimizedSkeletalMesh::FRenderInstance& Instance : Batch.Instances)
 				{
+					const bool bInstanceVisibleInView = OptimizedSkeletalMesh::IsInstanceVisibleInView(
+						*Views[ViewIndex],
+						Instance,
+						bEnableInstanceFrustumCulling,
+						InstanceCullBoundsScale);
+
+					if (bDrawCullingDebug)
+					{
+						DrawWireBox(
+							PDI,
+							Instance.WorldBounds,
+							bInstanceVisibleInView ? FColor::Green : FColor::Red,
+							SDPG_Foreground);
+
+						if (bDrawCullTestBounds)
+						{
+							const FBox CullTestBounds = OptimizedSkeletalMesh::GetCullTestBounds(Instance, InstanceCullBoundsScale);
+							if (CullTestBounds.IsValid)
+							{
+								DrawWireBox(
+									PDI,
+									CullTestBounds,
+									bInstanceVisibleInView ? FColor::Cyan : FColor::Orange,
+									SDPG_Foreground);
+							}
+						}
+					}
+
+					if (!bInstanceVisibleInView)
+					{
+						continue;
+					}
+
 					const int32 ChosenLODIndex = OptimizedSkeletalMesh::ChooseLODForView(
 						*Views[ViewIndex],
 						Batch.SkeletalMesh,
@@ -589,7 +725,7 @@ public:
 						++DrawnMeshInstances;
 					}
 
-					if (bDrawDebugBounds)
+					if (bDrawDebugBounds && !bDrawCullingDebug)
 					{
 						const FColor DebugColor = LODResources
 							? LODResources->DebugColor
@@ -650,6 +786,10 @@ private:
 	bool bDrawMeshSections = false;
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
 	int32 MaxMeshDrawInstances = 1;
+	bool bEnableInstanceFrustumCulling = true;
+	float InstanceCullBoundsScale = 1.5f;
+	bool bDrawCullingDebug = false;
+	bool bDrawCullTestBounds = true;
 };
 
 UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(const FObjectInitializer& ObjectInitializer)
@@ -693,6 +833,42 @@ void UOptimizedSkeletalMeshRenderComponent::SetMaxMeshDrawInstances(const int32 
 	RequestRenderRefresh();
 }
 
+void UOptimizedSkeletalMeshRenderComponent::SetInstanceFrustumCulling(const bool bInEnableInstanceFrustumCulling)
+{
+	bEnableInstanceFrustumCulling = bInEnableInstanceFrustumCulling;
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetInstanceCullBoundsScale(const float InInstanceCullBoundsScale)
+{
+	InstanceCullBoundsScale = FMath::Max(1.0f, InInstanceCullBoundsScale);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetConservativeProxyBounds(const bool bInUseConservativeProxyBounds)
+{
+	bUseConservativeProxyBounds = bInUseConservativeProxyBounds;
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetConservativeProxyBoundsExtent(const float InConservativeProxyBoundsExtent)
+{
+	ConservativeProxyBoundsExtent = FMath::Max(1000.0f, InConservativeProxyBoundsExtent);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetDrawCullingDebug(const bool bInDrawCullingDebug)
+{
+	bDrawCullingDebug = bInDrawCullingDebug;
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetDrawCullTestBounds(const bool bInDrawCullTestBounds)
+{
+	bDrawCullTestBounds = bInDrawCullTestBounds;
+	RequestRenderRefresh();
+}
+
 void UOptimizedSkeletalMeshRenderComponent::RequestRenderRefresh()
 {
 	UpdateBounds();
@@ -725,6 +901,11 @@ FBoxSphereBounds UOptimizedSkeletalMeshRenderComponent::CalcBounds(const FTransf
 	if (!WorldBox.IsValid)
 	{
 		WorldBox = FBox::BuildAABB(LocalToWorld.GetLocation(), FVector(1.0f));
+	}
+
+	if (bUseConservativeProxyBounds)
+	{
+		return FBoxSphereBounds(FBox::BuildAABB(WorldBox.GetCenter(), FVector(ConservativeProxyBoundsExtent)));
 	}
 
 	return FBoxSphereBounds(WorldBox);

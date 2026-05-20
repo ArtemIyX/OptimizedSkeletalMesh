@@ -75,6 +75,12 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 		PreviewRenderComponent->SetDrawMeshSections(bDrawMeshSections);
 		PreviewRenderComponent->SetMeshDrawMode(MeshDrawMode);
 		PreviewRenderComponent->SetMaxMeshDrawInstances(MaxMeshDrawInstances);
+		PreviewRenderComponent->SetInstanceFrustumCulling(bEnableInstanceFrustumCulling);
+		PreviewRenderComponent->SetInstanceCullBoundsScale(InstanceCullBoundsScale);
+		PreviewRenderComponent->SetConservativeProxyBounds(bUseConservativeProxyBounds);
+		PreviewRenderComponent->SetConservativeProxyBoundsExtent(ConservativeProxyBoundsExtent);
+		PreviewRenderComponent->SetDrawCullingDebug(bDrawCullingDebug);
+		PreviewRenderComponent->SetDrawCullTestBounds(bDrawCullTestBounds);
 	}
 
 	SpawnedHandles.Reserve(CountX * CountY);

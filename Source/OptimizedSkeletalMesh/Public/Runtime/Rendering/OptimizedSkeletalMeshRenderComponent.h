@@ -29,12 +29,24 @@ public:
 	void SetDrawMeshSections(bool bInDrawMeshSections);
 	void SetMeshDrawMode(EOptimizedSkeletalMeshDrawMode InMeshDrawMode);
 	void SetMaxMeshDrawInstances(int32 InMaxMeshDrawInstances);
+	void SetInstanceFrustumCulling(bool bInEnableInstanceFrustumCulling);
+	void SetInstanceCullBoundsScale(float InInstanceCullBoundsScale);
+	void SetConservativeProxyBounds(bool bInUseConservativeProxyBounds);
+	void SetConservativeProxyBoundsExtent(float InConservativeProxyBoundsExtent);
+	void SetDrawCullingDebug(bool bInDrawCullingDebug);
+	void SetDrawCullTestBounds(bool bInDrawCullTestBounds);
 	void RequestRenderRefresh();
 
 	bool ShouldDrawDebugBounds() const { return bDrawDebugBounds; }
 	bool ShouldDrawMeshSections() const { return bDrawMeshSections; }
 	EOptimizedSkeletalMeshDrawMode GetMeshDrawMode() const { return MeshDrawMode; }
 	int32 GetMaxMeshDrawInstances() const { return MaxMeshDrawInstances; }
+	bool ShouldEnableInstanceFrustumCulling() const { return bEnableInstanceFrustumCulling; }
+	float GetInstanceCullBoundsScale() const { return InstanceCullBoundsScale; }
+	bool ShouldUseConservativeProxyBounds() const { return bUseConservativeProxyBounds; }
+	float GetConservativeProxyBoundsExtent() const { return ConservativeProxyBoundsExtent; }
+	bool ShouldDrawCullingDebug() const { return bDrawCullingDebug; }
+	bool ShouldDrawCullTestBounds() const { return bDrawCullTestBounds; }
 
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
@@ -53,6 +65,24 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0"))
 	int32 MaxMeshDrawInstances = 1;
+
+	UPROPERTY(Transient)
+	bool bEnableInstanceFrustumCulling = true;
+
+	UPROPERTY(Transient)
+	float InstanceCullBoundsScale = 1.5f;
+
+	UPROPERTY(Transient)
+	bool bUseConservativeProxyBounds = true;
+
+	UPROPERTY(Transient)
+	float ConservativeProxyBoundsExtent = 10000000.0f;
+
+	UPROPERTY(Transient)
+	bool bDrawCullingDebug = false;
+
+	UPROPERTY(Transient)
+	bool bDrawCullTestBounds = true;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UOptimizedSkeletalMeshWorldSubsystem> Subsystem = nullptr;

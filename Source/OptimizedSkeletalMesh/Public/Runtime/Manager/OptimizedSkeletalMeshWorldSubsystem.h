@@ -94,6 +94,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool SetInstanceVisible(FOptimizedSkeletalMeshInstanceHandle Handle, bool bVisible);
 
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool ShowInstance(FOptimizedSkeletalMeshInstanceHandle Handle);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool HideInstance(FOptimizedSkeletalMeshInstanceHandle Handle);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	int32 SetInstancesVisible(const TArray<FOptimizedSkeletalMeshInstanceHandle>& Handles, bool bVisible);
+
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle Handle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
 

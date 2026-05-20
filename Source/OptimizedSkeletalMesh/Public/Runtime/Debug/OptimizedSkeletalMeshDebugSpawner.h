@@ -61,6 +61,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0"))
 	int32 MaxMeshDrawInstances = 1;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Culling")
+	bool bEnableInstanceFrustumCulling = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Culling", meta = (ClampMin = "1.0"))
+	float InstanceCullBoundsScale = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Culling")
+	bool bUseConservativeProxyBounds = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Culling", meta = (ClampMin = "1000.0"))
+	float ConservativeProxyBoundsExtent = 10000000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Culling")
+	bool bDrawCullingDebug = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Culling", meta = (EditCondition = "bDrawCullingDebug"))
+	bool bDrawCullTestBounds = true;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Debug")
 	int32 SpawnedInstanceCount = 0;
 
