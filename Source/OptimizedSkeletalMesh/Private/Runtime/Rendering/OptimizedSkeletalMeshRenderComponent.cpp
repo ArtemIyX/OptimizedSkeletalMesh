@@ -9,6 +9,7 @@
 #include "LocalVertexFactory.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialRenderProxy.h"
 #include "MeshElementCollector.h"
 #include "PrimitiveSceneProxy.h"
 #include "PrimitiveViewRelevance.h"
@@ -23,10 +24,12 @@ namespace OptimizedSkeletalMesh
 {
 	static constexpr float FallbackInstanceExtent = 50.0f;
 
-	struct FDebugInstance
+	struct FRenderInstance
 	{
 		FBox WorldBounds;
 		FMatrix44f LocalToWorld = FMatrix44f::Identity;
+		int32 ForcedLODIndex = 0;
+		bool bAutoLOD = true;
 	};
 
 	struct FCachedSectionMesh
@@ -85,32 +88,20 @@ namespace OptimizedSkeletalMesh
 		bool bInitialized = false;
 	};
 
-	struct FRenderBatchKey
+	struct FLODResources
 	{
-		TObjectPtr<USkeletalMesh> SkeletalMesh = nullptr;
-		int32 LODIndex = 0;
-
-		bool operator==(const FRenderBatchKey& Other) const
-		{
-			return SkeletalMesh == Other.SkeletalMesh && LODIndex == Other.LODIndex;
-		}
-	};
-
-	uint32 GetTypeHash(const FRenderBatchKey& Key)
-	{
-		return HashCombine(PointerHash(Key.SkeletalMesh.Get()), ::GetTypeHash(Key.LODIndex));
-	}
-
-	struct FRenderBatch
-	{
-		FRenderBatchKey Key;
-		TArray<FDebugInstance> Instances;
-		TArray<FCachedSectionMesh> Sections;
 		const FSkeletalMeshLODRenderData* LODRenderData = nullptr;
+		TArray<FCachedSectionMesh> Sections;
 		TUniquePtr<FDirectMeshResources> DirectResources;
 		FColor DebugColor = FColor::Yellow;
 
-		~FRenderBatch()
+		FLODResources() = default;
+		FLODResources(const FLODResources&) = delete;
+		FLODResources& operator=(const FLODResources&) = delete;
+		FLODResources(FLODResources&&) = default;
+		FLODResources& operator=(FLODResources&&) = default;
+
+		~FLODResources()
 		{
 			if (DirectResources)
 			{
@@ -119,6 +110,13 @@ namespace OptimizedSkeletalMesh
 				check(ReleasedResources);
 			}
 		}
+	};
+
+	struct FMeshRenderBatch
+	{
+		TObjectPtr<USkeletalMesh> SkeletalMesh = nullptr;
+		TArray<FRenderInstance> Instances;
+		TArray<TUniquePtr<FLODResources>> LODResources;
 	};
 
 	static FBox GetInstanceWorldBounds(const FOptimizedSkeletalMeshInstanceDesc& Desc)
@@ -176,6 +174,42 @@ namespace OptimizedSkeletalMesh
 		}
 
 		return nullptr;
+	}
+
+	static FLinearColor GetLODColorationColor(const int32 LODIndex)
+	{
+		if (GEngine && GEngine->LODColorationColors.IsValidIndex(LODIndex))
+		{
+			return GEngine->LODColorationColors[LODIndex];
+		}
+
+		return FLinearColor(GetBatchDebugColor(LODIndex));
+	}
+
+	static const FMaterialRenderProxy* GetLODColorationMaterialRenderProxy(
+		FMeshElementCollector& Collector,
+		const int32 LODIndex)
+	{
+		const FMaterialRenderProxy* ParentRenderProxy = nullptr;
+		if (GEngine && GEngine->ShadedLevelColorationUnlitMaterial)
+		{
+			ParentRenderProxy = GEngine->ShadedLevelColorationUnlitMaterial->GetRenderProxy();
+		}
+		else if (GEngine && GEngine->LevelColorationUnlitMaterial)
+		{
+			ParentRenderProxy = GEngine->LevelColorationUnlitMaterial->GetRenderProxy();
+		}
+		else if (UMaterialInterface* DefaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface))
+		{
+			ParentRenderProxy = DefaultMaterial->GetRenderProxy();
+		}
+
+		return ParentRenderProxy
+			? &Collector.AllocateOneFrameResource<FColoredMaterialRenderProxy>(
+				ParentRenderProxy,
+				GetLODColorationColor(LODIndex),
+				NAME_Color)
+			: nullptr;
 	}
 
 	static void BuildCachedSectionMeshes(const USkeletalMesh* SkeletalMesh, const int32 LODIndex, TArray<FCachedSectionMesh>& OutSections)
@@ -276,6 +310,64 @@ namespace OptimizedSkeletalMesh
 
 		return &RenderData->LODRenderData[LODIndex];
 	}
+
+	static int32 GetRenderLODCount(const USkeletalMesh* SkeletalMesh)
+	{
+		if (!SkeletalMesh)
+		{
+			return 0;
+		}
+
+		const FSkeletalMeshRenderData* RenderData = SkeletalMesh->GetResourceForRendering();
+		return RenderData ? RenderData->LODRenderData.Num() : 0;
+	}
+
+	static float GetLODScreenSizeThreshold(const USkeletalMesh* SkeletalMesh, const int32 LODIndex)
+	{
+		if (SkeletalMesh)
+		{
+			if (const FSkeletalMeshLODInfo* LODInfo = SkeletalMesh->GetLODInfo(LODIndex))
+			{
+				return LODInfo->ScreenSize.Default;
+			}
+		}
+
+		return FMath::Pow(0.5f, static_cast<float>(LODIndex));
+	}
+
+	static int32 ChooseLODForView(
+		const FSceneView& View,
+		const USkeletalMesh* SkeletalMesh,
+		const FRenderInstance& Instance,
+		const int32 NumLODs)
+	{
+		if (NumLODs <= 1)
+		{
+			return 0;
+		}
+
+		if (!Instance.bAutoLOD)
+		{
+			return FMath::Clamp(Instance.ForcedLODIndex, 0, NumLODs - 1);
+		}
+
+		const FBoxSphereBounds Bounds(Instance.WorldBounds);
+		const float ScreenSize = ComputeBoundsScreenSize(
+			FVector4(Bounds.Origin, 1.0f),
+			Bounds.SphereRadius,
+			View);
+
+		int32 ChosenLOD = 0;
+		for (int32 LODIndex = 1; LODIndex < NumLODs; ++LODIndex)
+		{
+			if (ScreenSize <= GetLODScreenSizeThreshold(SkeletalMesh, LODIndex))
+			{
+				ChosenLOD = LODIndex;
+			}
+		}
+
+		return FMath::Clamp(ChosenLOD, 0, NumLODs - 1);
+	}
 }
 
 class FOptimizedSkeletalMeshSceneProxy final : public FPrimitiveSceneProxy
@@ -295,8 +387,8 @@ public:
 				TArray<FOptimizedSkeletalMeshInstanceSnapshot> Snapshots;
 				Subsystem->GetInstancesSnapshot(Snapshots);
 
-				TMap<OptimizedSkeletalMesh::FRenderBatchKey, int32> BatchIndexByKey;
-				RenderBatches.Reserve(Snapshots.Num());
+				TMap<USkeletalMesh*, int32> BatchIndexByMesh;
+				MeshBatches.Reserve(Snapshots.Num());
 
 				for (const FOptimizedSkeletalMeshInstanceSnapshot& Snapshot : Snapshots)
 				{
@@ -305,45 +397,55 @@ public:
 						continue;
 					}
 
-					OptimizedSkeletalMesh::FRenderBatchKey BatchKey;
-					BatchKey.SkeletalMesh = Snapshot.Desc.SkeletalMesh;
-					BatchKey.LODIndex = FMath::Max(0, Snapshot.Desc.LODIndex);
+					USkeletalMesh* SkeletalMesh = Snapshot.Desc.SkeletalMesh.Get();
+					int32* ExistingBatchIndex = BatchIndexByMesh.Find(SkeletalMesh);
 
-					int32* ExistingBatchIndex = BatchIndexByKey.Find(BatchKey);
 					if (!ExistingBatchIndex)
 					{
-						const int32 NewBatchIndex = RenderBatches.Num();
-						OptimizedSkeletalMesh::FRenderBatch& NewBatch = RenderBatches.AddDefaulted_GetRef();
-						NewBatch.Key = BatchKey;
-						NewBatch.DebugColor = OptimizedSkeletalMesh::GetBatchDebugColor(NewBatchIndex);
-						BatchIndexByKey.Add(BatchKey, NewBatchIndex);
-						ExistingBatchIndex = BatchIndexByKey.Find(BatchKey);
+						const int32 NewBatchIndex = MeshBatches.Num();
+						OptimizedSkeletalMesh::FMeshRenderBatch& NewBatch = MeshBatches.AddDefaulted_GetRef();
+						NewBatch.SkeletalMesh = SkeletalMesh;
+						BatchIndexByMesh.Add(SkeletalMesh, NewBatchIndex);
+						ExistingBatchIndex = BatchIndexByMesh.Find(SkeletalMesh);
 					}
 
-					OptimizedSkeletalMesh::FRenderBatch& Batch = RenderBatches[*ExistingBatchIndex];
-					OptimizedSkeletalMesh::FDebugInstance& DebugInstance = Batch.Instances.AddDefaulted_GetRef();
-					DebugInstance.WorldBounds = OptimizedSkeletalMesh::GetInstanceWorldBounds(Snapshot.Desc);
-					DebugInstance.LocalToWorld = FMatrix44f(Snapshot.Desc.WorldTransform.ToMatrixWithScale());
+					OptimizedSkeletalMesh::FMeshRenderBatch& Batch = MeshBatches[*ExistingBatchIndex];
+					OptimizedSkeletalMesh::FRenderInstance& RenderInstance = Batch.Instances.AddDefaulted_GetRef();
+					RenderInstance.WorldBounds = OptimizedSkeletalMesh::GetInstanceWorldBounds(Snapshot.Desc);
+					RenderInstance.LocalToWorld = FMatrix44f(Snapshot.Desc.WorldTransform.ToMatrixWithScale());
+					RenderInstance.ForcedLODIndex = FMath::Max(0, Snapshot.Desc.LODIndex);
+					RenderInstance.bAutoLOD = Snapshot.Desc.bAutoLOD;
 				}
 
-				if (bDrawMeshSections)
+				for (OptimizedSkeletalMesh::FMeshRenderBatch& Batch : MeshBatches)
 				{
-					for (OptimizedSkeletalMesh::FRenderBatch& Batch : RenderBatches)
+					const int32 LODCount = OptimizedSkeletalMesh::GetRenderLODCount(Batch.SkeletalMesh);
+					Batch.LODResources.Reserve(LODCount);
+					for (int32 LODIndex = 0; LODIndex < LODCount; ++LODIndex)
 					{
-						Batch.LODRenderData = OptimizedSkeletalMesh::GetLODRenderData(Batch.Key.SkeletalMesh, Batch.Key.LODIndex);
+						TUniquePtr<OptimizedSkeletalMesh::FLODResources> LODResources =
+							MakeUnique<OptimizedSkeletalMesh::FLODResources>();
+						LODResources->LODRenderData = OptimizedSkeletalMesh::GetLODRenderData(Batch.SkeletalMesh, LODIndex);
+						LODResources->DebugColor = OptimizedSkeletalMesh::GetBatchDebugColor(LODIndex);
 
-						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
+						if (bDrawMeshSections)
 						{
-							OptimizedSkeletalMesh::BuildCachedSectionMeshes(
-								Batch.Key.SkeletalMesh,
-								Batch.Key.LODIndex,
-								Batch.Sections);
+							if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
+							{
+								OptimizedSkeletalMesh::BuildCachedSectionMeshes(
+									Batch.SkeletalMesh,
+									LODIndex,
+									LODResources->Sections);
+							}
+							else if (LODResources->LODRenderData)
+							{
+								LODResources->DirectResources =
+									MakeUnique<OptimizedSkeletalMesh::FDirectMeshResources>(GetScene().GetFeatureLevel());
+								LODResources->DirectResources->Init(*LODResources->LODRenderData);
+							}
 						}
-						else if (Batch.LODRenderData)
-						{
-							Batch.DirectResources = MakeUnique<OptimizedSkeletalMesh::FDirectMeshResources>(GetScene().GetFeatureLevel());
-							Batch.DirectResources->Init(*Batch.LODRenderData);
-						}
+
+						Batch.LODResources.Add(MoveTemp(LODResources));
 					}
 				}
 			}
@@ -370,20 +472,29 @@ public:
 			}
 
 			const bool bIsWireframeView = ViewFamily.EngineShowFlags.Wireframe;
+			const bool bIsLODColorationView = ViewFamily.EngineShowFlags.LODColoration;
 			FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
-			for (const OptimizedSkeletalMesh::FRenderBatch& Batch : RenderBatches)
-			{
-				if (bDrawMeshSections)
-				{
-					const int32 MeshDrawInstanceCount = MaxMeshDrawInstances <= 0
-						? Batch.Instances.Num()
-						: FMath::Min(MaxMeshDrawInstances, Batch.Instances.Num());
+			int32 DrawnMeshInstances = 0;
 
-					if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
+			for (const OptimizedSkeletalMesh::FMeshRenderBatch& Batch : MeshBatches)
+			{
+				for (const OptimizedSkeletalMesh::FRenderInstance& Instance : Batch.Instances)
+				{
+					const int32 ChosenLODIndex = OptimizedSkeletalMesh::ChooseLODForView(
+						*Views[ViewIndex],
+						Batch.SkeletalMesh,
+						Instance,
+						Batch.LODResources.Num());
+					const OptimizedSkeletalMesh::FLODResources* LODResources =
+						Batch.LODResources.IsValidIndex(ChosenLODIndex)
+							? Batch.LODResources[ChosenLODIndex].Get()
+							: nullptr;
+
+					if (bDrawMeshSections && LODResources && (MaxMeshDrawInstances <= 0 || DrawnMeshInstances < MaxMeshDrawInstances))
 					{
-						for (int32 InstanceIndex = 0; InstanceIndex < MeshDrawInstanceCount; ++InstanceIndex)
+						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
 						{
-							for (const OptimizedSkeletalMesh::FCachedSectionMesh& Section : Batch.Sections)
+							for (const OptimizedSkeletalMesh::FCachedSectionMesh& Section : LODResources->Sections)
 							{
 								if (!Section.MaterialRenderProxy || Section.Vertices.IsEmpty() || Section.Indices.IsEmpty())
 								{
@@ -400,9 +511,20 @@ public:
 								MeshSettings.bDisableBackfaceCulling = false;
 								MeshSettings.bReceivesDecals = true;
 								MeshSettings.bUseSelectionOutline = true;
+								MeshSettings.bCanApplyViewModeOverrides = true;
+								const FMaterialRenderProxy* DynamicMaterialRenderProxy = bIsLODColorationView
+									? OptimizedSkeletalMesh::GetLODColorationMaterialRenderProxy(Collector, ChosenLODIndex)
+									: bIsWireframeView
+										? OptimizedSkeletalMesh::GetWireframeMaterialRenderProxy()
+										: Section.MaterialRenderProxy;
+								if (!DynamicMaterialRenderProxy)
+								{
+									continue;
+								}
+
 								MeshBuilder.GetMesh(
-									FMatrix(Batch.Instances[InstanceIndex].LocalToWorld),
-									bIsWireframeView ? OptimizedSkeletalMesh::GetWireframeMaterialRenderProxy() : Section.MaterialRenderProxy,
+									FMatrix(Instance.LocalToWorld),
+									DynamicMaterialRenderProxy,
 									SDPG_World,
 									MeshSettings,
 									nullptr,
@@ -410,12 +532,9 @@ public:
 									Collector);
 							}
 						}
-					}
-					else if (Batch.LODRenderData && Batch.DirectResources && Batch.DirectResources->bInitialized)
-					{
-						for (int32 InstanceIndex = 0; InstanceIndex < MeshDrawInstanceCount; ++InstanceIndex)
+						else if (LODResources->LODRenderData && LODResources->DirectResources && LODResources->DirectResources->bInitialized)
 						{
-							for (const FSkelMeshRenderSection& RenderSection : Batch.LODRenderData->RenderSections)
+							for (const FSkelMeshRenderSection& RenderSection : LODResources->LODRenderData->RenderSections)
 							{
 								if (!RenderSection.IsValid())
 								{
@@ -424,36 +543,39 @@ public:
 
 								const FMaterialRenderProxy* MaterialRenderProxy = bIsWireframeView
 									? OptimizedSkeletalMesh::GetWireframeMaterialRenderProxy()
-									: OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(Batch.Key.SkeletalMesh, RenderSection);
+									: OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(Batch.SkeletalMesh, RenderSection);
 								if (!MaterialRenderProxy)
 								{
 									continue;
 								}
 
 								FMeshBatch& Mesh = Collector.AllocateMesh();
-								Mesh.VertexFactory = &Batch.DirectResources->VertexFactory;
+								Mesh.VertexFactory = &LODResources->DirectResources->VertexFactory;
 								Mesh.MaterialRenderProxy = MaterialRenderProxy;
-								Mesh.ReverseCulling = FMatrix(Batch.Instances[InstanceIndex].LocalToWorld).Determinant() < 0.0;
+								Mesh.ReverseCulling = FMatrix(Instance.LocalToWorld).Determinant() < 0.0;
 								Mesh.Type = PT_TriangleList;
 								Mesh.DepthPriorityGroup = SDPG_World;
-								Mesh.bCanApplyViewModeOverrides = false;
+								Mesh.bCanApplyViewModeOverrides = true;
 								Mesh.CastShadow = false;
 								Mesh.bWireframe = bIsWireframeView;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+								Mesh.VisualizeLODIndex = ChosenLODIndex;
+#endif
 
 								FMeshBatchElement& BatchElement = Mesh.Elements[0];
-								BatchElement.IndexBuffer = Batch.LODRenderData->MultiSizeIndexContainer.GetIndexBuffer();
+								BatchElement.IndexBuffer = LODResources->LODRenderData->MultiSizeIndexContainer.GetIndexBuffer();
 								BatchElement.FirstIndex = RenderSection.BaseIndex;
 								BatchElement.NumPrimitives = RenderSection.NumTriangles;
 								BatchElement.MinVertexIndex = RenderSection.BaseVertexIndex;
 								BatchElement.MaxVertexIndex = RenderSection.BaseVertexIndex + RenderSection.NumVertices - 1;
 								FDynamicPrimitiveUniformBuffer& DynamicPrimitiveUniformBuffer =
 									Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
-								const FMatrix InstanceLocalToWorld(Batch.Instances[InstanceIndex].LocalToWorld);
+								const FMatrix InstanceLocalToWorld(Instance.LocalToWorld);
 								DynamicPrimitiveUniformBuffer.Set(
 									Collector.GetRHICommandList(),
 									InstanceLocalToWorld,
 									InstanceLocalToWorld,
-									Batch.Instances[InstanceIndex].WorldBounds,
+									Instance.WorldBounds,
 									GetLocalBounds(),
 									true,
 									false,
@@ -463,14 +585,16 @@ public:
 								Collector.AddMesh(ViewIndex, Mesh);
 							}
 						}
-					}
-				}
 
-				if (bDrawDebugBounds)
-				{
-					for (const OptimizedSkeletalMesh::FDebugInstance& DebugInstance : Batch.Instances)
+						++DrawnMeshInstances;
+					}
+
+					if (bDrawDebugBounds)
 					{
-						DrawWireBox(PDI, DebugInstance.WorldBounds, Batch.DebugColor, SDPG_Foreground);
+						const FColor DebugColor = LODResources
+							? LODResources->DebugColor
+							: OptimizedSkeletalMesh::GetBatchDebugColor(ChosenLODIndex);
+						DrawWireBox(PDI, Instance.WorldBounds, DebugColor, SDPG_Foreground);
 					}
 				}
 			}
@@ -495,15 +619,25 @@ public:
 
 	uint32 GetOptimizedAllocatedSize() const
 	{
-		SIZE_T AllocatedSize = FPrimitiveSceneProxy::GetAllocatedSize() + RenderBatches.GetAllocatedSize();
-		for (const OptimizedSkeletalMesh::FRenderBatch& Batch : RenderBatches)
+		SIZE_T AllocatedSize = FPrimitiveSceneProxy::GetAllocatedSize() + MeshBatches.GetAllocatedSize();
+		for (const OptimizedSkeletalMesh::FMeshRenderBatch& Batch : MeshBatches)
 		{
 			AllocatedSize += Batch.Instances.GetAllocatedSize();
-			AllocatedSize += Batch.Sections.GetAllocatedSize();
-			for (const OptimizedSkeletalMesh::FCachedSectionMesh& Section : Batch.Sections)
+			AllocatedSize += Batch.LODResources.GetAllocatedSize();
+			for (const TUniquePtr<OptimizedSkeletalMesh::FLODResources>& LODResources : Batch.LODResources)
 			{
-				AllocatedSize += Section.Vertices.GetAllocatedSize();
-				AllocatedSize += Section.Indices.GetAllocatedSize();
+				if (!LODResources)
+				{
+					continue;
+				}
+
+				AllocatedSize += sizeof(OptimizedSkeletalMesh::FLODResources);
+				AllocatedSize += LODResources->Sections.GetAllocatedSize();
+				for (const OptimizedSkeletalMesh::FCachedSectionMesh& Section : LODResources->Sections)
+				{
+					AllocatedSize += Section.Vertices.GetAllocatedSize();
+					AllocatedSize += Section.Indices.GetAllocatedSize();
+				}
 			}
 		}
 
@@ -511,7 +645,7 @@ public:
 	}
 
 private:
-	TArray<OptimizedSkeletalMesh::FRenderBatch> RenderBatches;
+	TArray<OptimizedSkeletalMesh::FMeshRenderBatch> MeshBatches;
 	bool bDrawDebugBounds = true;
 	bool bDrawMeshSections = false;
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
@@ -639,5 +773,15 @@ void UOptimizedSkeletalMeshRenderComponent::GetUsedMaterials(
 	if (GEngine && GEngine->WireframeMaterial)
 	{
 		OutMaterials.AddUnique(GEngine->WireframeMaterial);
+	}
+
+	if (GEngine && GEngine->LevelColorationUnlitMaterial)
+	{
+		OutMaterials.AddUnique(GEngine->LevelColorationUnlitMaterial);
+	}
+
+	if (GEngine && GEngine->ShadedLevelColorationUnlitMaterial)
+	{
+		OutMaterials.AddUnique(GEngine->ShadedLevelColorationUnlitMaterial);
 	}
 }

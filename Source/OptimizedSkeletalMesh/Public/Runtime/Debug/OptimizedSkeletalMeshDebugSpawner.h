@@ -52,6 +52,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug")
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug")
+	bool bAutoLOD = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0", EditCondition = "!bAutoLOD"))
+	int32 ForcedLODIndex = 0;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0"))
 	int32 MaxMeshDrawInstances = 1;
 

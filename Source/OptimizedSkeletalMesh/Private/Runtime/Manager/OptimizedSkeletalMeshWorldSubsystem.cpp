@@ -176,7 +176,7 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::GetInstanceCount() const
 
 int32 UOptimizedSkeletalMeshWorldSubsystem::GetVisibleRenderBatchCount() const
 {
-	TSet<uint32> BatchHashes;
+	TSet<USkeletalMesh*> VisibleMeshes;
 
 	for (const TPair<int32, FOptimizedSkeletalMeshInstanceDesc>& Pair : Instances)
 	{
@@ -186,11 +186,10 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::GetVisibleRenderBatchCount() const
 			continue;
 		}
 
-		const uint32 BatchHash = HashCombine(PointerHash(Desc.SkeletalMesh.Get()), ::GetTypeHash(FMath::Max(0, Desc.LODIndex)));
-		BatchHashes.Add(BatchHash);
+		VisibleMeshes.Add(Desc.SkeletalMesh.Get());
 	}
 
-	return BatchHashes.Num();
+	return VisibleMeshes.Num();
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::SetExternalRenderBridgeActive(const bool bInActive)

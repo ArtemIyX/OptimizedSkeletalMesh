@@ -46,6 +46,9 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceDesc
 	int32 LODIndex = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh")
+	bool bAutoLOD = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh")
 	float AnimationTime = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh")

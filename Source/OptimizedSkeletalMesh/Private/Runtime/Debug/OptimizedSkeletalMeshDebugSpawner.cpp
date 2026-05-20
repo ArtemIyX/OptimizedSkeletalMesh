@@ -86,7 +86,8 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 			FOptimizedSkeletalMeshInstanceDesc Desc;
 			Desc.SkeletalMesh = SkeletalMesh;
 			Desc.WorldTransform = GetInstanceTransform(X, Y);
-			Desc.LODIndex = 0;
+			Desc.LODIndex = ForcedLODIndex;
+			Desc.bAutoLOD = bAutoLOD;
 			Desc.AnimationTime = 0.0f;
 			Desc.bVisible = true;
 
