@@ -54,7 +54,7 @@ public:
 
 					OptimizedSkeletalMesh::FDebugInstance& DebugInstance = DebugInstances.AddDefaulted_GetRef();
 					DebugInstance.WorldBounds = OptimizedSkeletalMesh::GetInstanceWorldBounds(Snapshot.Desc);
-					DebugInstance.Color = FColor::Cyan;
+					DebugInstance.Color = FColor::Yellow;
 				}
 			}
 		}
@@ -82,7 +82,7 @@ public:
 			FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
 			for (const OptimizedSkeletalMesh::FDebugInstance& DebugInstance : DebugInstances)
 			{
-				DrawWireBox(PDI, DebugInstance.WorldBounds, DebugInstance.Color, SDPG_World);
+				DrawWireBox(PDI, DebugInstance.WorldBounds, DebugInstance.Color, SDPG_Foreground);
 			}
 		}
 	}
