@@ -3,6 +3,7 @@
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 
 #include "DynamicMeshBuilder.h"
+#include "Engine/Engine.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "LocalVertexFactory.h"
@@ -160,6 +161,21 @@ namespace OptimizedSkeletalMesh
 		}
 
 		return Material ? Material->GetRenderProxy() : nullptr;
+	}
+
+	static const FMaterialRenderProxy* GetWireframeMaterialRenderProxy()
+	{
+		if (GEngine && GEngine->WireframeMaterial)
+		{
+			return GEngine->WireframeMaterial->GetRenderProxy();
+		}
+
+		if (UMaterialInterface* DefaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface))
+		{
+			return DefaultMaterial->GetRenderProxy();
+		}
+
+		return nullptr;
 	}
 
 	static void BuildCachedSectionMeshes(const USkeletalMesh* SkeletalMesh, const int32 LODIndex, TArray<FCachedSectionMesh>& OutSections)
@@ -353,6 +369,7 @@ public:
 				continue;
 			}
 
+			const bool bIsWireframeView = ViewFamily.EngineShowFlags.Wireframe;
 			FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
 			for (const OptimizedSkeletalMesh::FRenderBatch& Batch : RenderBatches)
 			{
@@ -378,12 +395,17 @@ public:
 								MeshBuilder.ReserveTriangles(Section.Indices.Num() / 3);
 								MeshBuilder.AddVertices(Section.Vertices);
 								MeshBuilder.AddTriangles(Section.Indices);
+								FDynamicMeshBuilderSettings MeshSettings;
+								MeshSettings.bWireframe = bIsWireframeView;
+								MeshSettings.bDisableBackfaceCulling = false;
+								MeshSettings.bReceivesDecals = true;
+								MeshSettings.bUseSelectionOutline = true;
 								MeshBuilder.GetMesh(
 									FMatrix(Batch.Instances[InstanceIndex].LocalToWorld),
-									Section.MaterialRenderProxy,
+									bIsWireframeView ? OptimizedSkeletalMesh::GetWireframeMaterialRenderProxy() : Section.MaterialRenderProxy,
 									SDPG_World,
-									false,
-									true,
+									MeshSettings,
+									nullptr,
 									ViewIndex,
 									Collector);
 							}
@@ -400,8 +422,9 @@ public:
 									continue;
 								}
 
-								const FMaterialRenderProxy* MaterialRenderProxy =
-									OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(Batch.Key.SkeletalMesh, RenderSection);
+								const FMaterialRenderProxy* MaterialRenderProxy = bIsWireframeView
+									? OptimizedSkeletalMesh::GetWireframeMaterialRenderProxy()
+									: OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(Batch.Key.SkeletalMesh, RenderSection);
 								if (!MaterialRenderProxy)
 								{
 									continue;
@@ -415,6 +438,7 @@ public:
 								Mesh.DepthPriorityGroup = SDPG_World;
 								Mesh.bCanApplyViewModeOverrides = false;
 								Mesh.CastShadow = false;
+								Mesh.bWireframe = bIsWireframeView;
 
 								FMeshBatchElement& BatchElement = Mesh.Elements[0];
 								BatchElement.IndexBuffer = Batch.LODRenderData->MultiSizeIndexContainer.GetIndexBuffer();
@@ -610,5 +634,10 @@ void UOptimizedSkeletalMeshRenderComponent::GetUsedMaterials(
 	if (UMaterialInterface* DefaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface))
 	{
 		OutMaterials.AddUnique(DefaultMaterial);
+	}
+
+	if (GEngine && GEngine->WireframeMaterial)
+	{
+		OutMaterials.AddUnique(GEngine->WireframeMaterial);
 	}
 }
