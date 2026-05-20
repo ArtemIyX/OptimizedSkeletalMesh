@@ -59,6 +59,9 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 	if (PreviewRenderComponent)
 	{
 		PreviewRenderComponent->SetOptimizedSkeletalMeshSubsystem(Subsystem);
+		PreviewRenderComponent->SetDrawDebugBounds(bDrawDebugBounds);
+		PreviewRenderComponent->SetDrawMeshSections(bDrawMeshSections);
+		PreviewRenderComponent->SetMaxMeshDrawInstances(MaxMeshDrawInstances);
 	}
 
 	SpawnedHandles.Reserve(CountX * CountY);
