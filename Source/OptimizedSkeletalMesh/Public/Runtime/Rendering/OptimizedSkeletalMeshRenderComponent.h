@@ -13,7 +13,8 @@ UENUM(BlueprintType)
 enum class EOptimizedSkeletalMeshDrawMode : uint8
 {
 	DynamicMeshProof UMETA(DisplayName = "Dynamic Mesh Proof"),
-	DirectMeshBatch UMETA(DisplayName = "Direct Mesh Batch")
+	DirectMeshPerInstance UMETA(DisplayName = "Direct Mesh Per Instance"),
+	DirectMeshInstanced UMETA(DisplayName = "Direct Mesh Instanced")
 };
 
 USTRUCT(BlueprintType)

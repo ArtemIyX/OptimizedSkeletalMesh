@@ -678,7 +678,7 @@ public:
 
 			for (const OptimizedSkeletalMesh::FMeshRenderBatch& Batch : MeshBatches)
 			{
-				if (bDrawMeshSections && MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DirectMeshBatch)
+				if (bDrawMeshSections && MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DirectMeshInstanced)
 				{
 					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> VisibleInstancesByLOD;
 					VisibleInstancesByLOD.SetNum(Batch.LODResources.Num());
@@ -894,7 +894,6 @@ public:
 
 					if (bDrawMeshSections && LODResources && (MaxMeshDrawInstances <= 0 || DrawnMeshInstances < MaxMeshDrawInstances))
 					{
-						++FrameStats.VisibleInstances;
 						++FrameStats.DrawnInstances;
 						OptimizedSkeletalMesh::AddVisibleLODStat(FrameStats, ChosenLODIndex, 1);
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
