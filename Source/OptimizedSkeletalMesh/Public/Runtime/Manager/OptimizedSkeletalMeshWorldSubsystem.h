@@ -108,6 +108,8 @@ public:
 		return bRenderDataDirty;
 	}
 
+	void SetExternalRenderBridgeActive(bool bInActive);
+
 	void ClearRenderDataDirty()
 	{
 		bRenderDataDirty = false;
@@ -134,4 +136,5 @@ private:
 
 	int32 NextInstanceId = 1;
 	bool bRenderDataDirty = false;
+	bool bExternalRenderBridgeActive = false;
 };

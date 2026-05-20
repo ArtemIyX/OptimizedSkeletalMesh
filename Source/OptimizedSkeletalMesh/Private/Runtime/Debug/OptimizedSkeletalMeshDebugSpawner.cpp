@@ -28,10 +28,18 @@ void AOptimizedSkeletalMeshDebugSpawner::OnConstruction(const FTransform& Transf
 {
 	Super::OnConstruction(Transform);
 
-	if (bRebuildOnConstruction)
+	const UWorld* World = GetWorld();
+	if (bRebuildOnConstruction && World && World->WorldType == EWorldType::Editor)
 	{
 		RebuildInstances();
 	}
+}
+
+void AOptimizedSkeletalMeshDebugSpawner::BeginPlay()
+{
+	Super::BeginPlay();
+
+	RebuildInstances();
 }
 
 void AOptimizedSkeletalMeshDebugSpawner::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -55,6 +63,8 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 	{
 		return;
 	}
+
+	Subsystem->SetExternalRenderBridgeActive(PreviewRenderComponent != nullptr);
 
 	if (PreviewRenderComponent)
 	{
@@ -103,6 +113,8 @@ void AOptimizedSkeletalMeshDebugSpawner::ClearInstances()
 		{
 			Subsystem->UnregisterInstance(Handle);
 		}
+
+		Subsystem->SetExternalRenderBridgeActive(false);
 	}
 
 	SpawnedHandles.Reset();
@@ -135,8 +147,9 @@ FTransform AOptimizedSkeletalMeshDebugSpawner::GetInstanceTransform(const int32 
 		static_cast<float>(Y) * Spacing,
 		0.0f);
 
-	FTransform InstanceTransform = GetActorTransform();
-	InstanceTransform.AddToTranslation(LocalOffset - CenterOffset);
+	const FTransform ActorTransform = GetActorTransform();
+	FTransform InstanceTransform = ActorTransform;
+	InstanceTransform.SetLocation(ActorTransform.TransformPosition(LocalOffset - CenterOffset));
 
 	return InstanceTransform;
 }

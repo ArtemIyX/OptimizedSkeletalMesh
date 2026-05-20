@@ -410,7 +410,7 @@ public:
 								FMeshBatch& Mesh = Collector.AllocateMesh();
 								Mesh.VertexFactory = &Batch.DirectResources->VertexFactory;
 								Mesh.MaterialRenderProxy = MaterialRenderProxy;
-								Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
+								Mesh.ReverseCulling = FMatrix(Batch.Instances[InstanceIndex].LocalToWorld).Determinant() < 0.0;
 								Mesh.Type = PT_TriangleList;
 								Mesh.DepthPriorityGroup = SDPG_World;
 								Mesh.bCanApplyViewModeOverrides = false;

@@ -193,8 +193,27 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::GetVisibleRenderBatchCount() const
 	return BatchHashes.Num();
 }
 
+void UOptimizedSkeletalMeshWorldSubsystem::SetExternalRenderBridgeActive(const bool bInActive)
+{
+	bExternalRenderBridgeActive = bInActive;
+
+	if (bExternalRenderBridgeActive)
+	{
+		DestroyRenderBridge();
+	}
+	else
+	{
+		EnsureRenderBridge();
+	}
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::EnsureRenderBridge()
 {
+	if (bExternalRenderBridgeActive)
+	{
+		return;
+	}
+
 	if (RenderComponent && RenderComponent->IsRegistered())
 	{
 		return;
