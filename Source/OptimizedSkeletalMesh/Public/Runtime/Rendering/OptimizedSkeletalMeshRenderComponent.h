@@ -9,6 +9,13 @@
 class FPrimitiveSceneProxy;
 class UOptimizedSkeletalMeshWorldSubsystem;
 
+UENUM(BlueprintType)
+enum class EOptimizedSkeletalMeshDrawMode : uint8
+{
+	DynamicMeshProof UMETA(DisplayName = "Dynamic Mesh Proof"),
+	DirectMeshBatch UMETA(DisplayName = "Direct Mesh Batch")
+};
+
 UCLASS(NotBlueprintable, ClassGroup = Rendering)
 class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshRenderComponent : public UPrimitiveComponent
 {
@@ -20,11 +27,13 @@ public:
 	void SetOptimizedSkeletalMeshSubsystem(UOptimizedSkeletalMeshWorldSubsystem* InSubsystem);
 	void SetDrawDebugBounds(bool bInDrawDebugBounds);
 	void SetDrawMeshSections(bool bInDrawMeshSections);
+	void SetMeshDrawMode(EOptimizedSkeletalMeshDrawMode InMeshDrawMode);
 	void SetMaxMeshDrawInstances(int32 InMaxMeshDrawInstances);
 	void RequestRenderRefresh();
 
 	bool ShouldDrawDebugBounds() const { return bDrawDebugBounds; }
 	bool ShouldDrawMeshSections() const { return bDrawMeshSections; }
+	EOptimizedSkeletalMeshDrawMode GetMeshDrawMode() const { return MeshDrawMode; }
 	int32 GetMaxMeshDrawInstances() const { return MaxMeshDrawInstances; }
 
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
@@ -38,6 +47,9 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Optimized Skeletal Mesh|Debug")
 	bool bDrawMeshSections = false;
+
+	UPROPERTY(EditAnywhere, Category = "Optimized Skeletal Mesh|Debug")
+	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
 
 	UPROPERTY(EditAnywhere, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0"))
 	int32 MaxMeshDrawInstances = 1;

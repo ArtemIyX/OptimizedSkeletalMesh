@@ -28,6 +28,8 @@ public class OptimizedSkeletalMesh : ModuleRules
 				"Core",
 				"CoreUObject",
 				"Engine",
+				"RenderCore",
+				"RHI",
 			}
 			);
 			

@@ -5,10 +5,10 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Runtime/Manager/OptimizedSkeletalMeshWorldSubsystem.h"
+#include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 #include "OptimizedSkeletalMeshDebugSpawner.generated.h"
 
 class USkeletalMesh;
-class UOptimizedSkeletalMeshRenderComponent;
 
 UCLASS(Blueprintable)
 class OPTIMIZEDSKELETALMESH_API AOptimizedSkeletalMeshDebugSpawner : public AActor
@@ -47,6 +47,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug")
 	bool bDrawMeshSections = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug")
+	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0"))
 	int32 MaxMeshDrawInstances = 1;

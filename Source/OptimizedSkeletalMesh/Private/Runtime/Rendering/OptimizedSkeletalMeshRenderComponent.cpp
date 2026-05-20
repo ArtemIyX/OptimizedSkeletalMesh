@@ -5,11 +5,14 @@
 #include "DynamicMeshBuilder.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
+#include "LocalVertexFactory.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
 #include "MeshElementCollector.h"
 #include "PrimitiveSceneProxy.h"
 #include "PrimitiveViewRelevance.h"
+#include "RawIndexBuffer.h"
+#include "RenderDeferredCleanup.h"
 #include "Rendering/SkeletalMeshLODRenderData.h"
 #include "Rendering/SkeletalMeshRenderData.h"
 #include "Runtime/Manager/OptimizedSkeletalMeshWorldSubsystem.h"
@@ -30,6 +33,55 @@ namespace OptimizedSkeletalMesh
 		TArray<FDynamicMeshVertex> Vertices;
 		TArray<uint32> Indices;
 		const FMaterialRenderProxy* MaterialRenderProxy = nullptr;
+	};
+
+	struct FDirectMeshResources : public FDeferredCleanupInterface
+	{
+		explicit FDirectMeshResources(ERHIFeatureLevel::Type InFeatureLevel)
+			: VertexFactory(InFeatureLevel, "OptimizedSkeletalMeshDirectVF")
+		{
+		}
+
+		void BeginDeferredRelease()
+		{
+			if (bInitialized)
+			{
+				BeginReleaseResource(&VertexFactory);
+				bInitialized = false;
+			}
+
+			BeginCleanup(this);
+		}
+
+		void Init(const FSkeletalMeshLODRenderData& LODRenderData)
+		{
+			FPositionVertexBuffer* PositionVertexBuffer = const_cast<FPositionVertexBuffer*>(
+				&LODRenderData.StaticVertexBuffers.PositionVertexBuffer);
+			FStaticMeshVertexBuffer* StaticMeshVertexBuffer = const_cast<FStaticMeshVertexBuffer*>(
+				&LODRenderData.StaticVertexBuffers.StaticMeshVertexBuffer);
+			FColorVertexBuffer* ColorVertexBuffer = const_cast<FColorVertexBuffer*>(
+				&LODRenderData.StaticVertexBuffers.ColorVertexBuffer);
+			FLocalVertexFactory* VertexFactoryPtr = &VertexFactory;
+
+			ENQUEUE_RENDER_COMMAND(InitOptimizedSkeletalMeshDirectVF)(
+				[VertexFactoryPtr, PositionVertexBuffer, StaticMeshVertexBuffer, ColorVertexBuffer](FRHICommandList& RHICmdList)
+				{
+					FLocalVertexFactory::FDataType Data;
+					PositionVertexBuffer->BindPositionVertexBuffer(VertexFactoryPtr, Data);
+					StaticMeshVertexBuffer->BindTangentVertexBuffer(VertexFactoryPtr, Data);
+					StaticMeshVertexBuffer->BindPackedTexCoordVertexBuffer(VertexFactoryPtr, Data);
+					StaticMeshVertexBuffer->BindLightMapVertexBuffer(VertexFactoryPtr, Data, 0);
+					ColorVertexBuffer->BindColorVertexBuffer(VertexFactoryPtr, Data);
+
+					VertexFactoryPtr->SetData(RHICmdList, Data);
+					VertexFactoryPtr->InitResource(RHICmdList);
+				});
+
+			bInitialized = true;
+		}
+
+		FLocalVertexFactory VertexFactory;
+		bool bInitialized = false;
 	};
 
 	struct FRenderBatchKey
@@ -53,7 +105,19 @@ namespace OptimizedSkeletalMesh
 		FRenderBatchKey Key;
 		TArray<FDebugInstance> Instances;
 		TArray<FCachedSectionMesh> Sections;
+		const FSkeletalMeshLODRenderData* LODRenderData = nullptr;
+		TUniquePtr<FDirectMeshResources> DirectResources;
 		FColor DebugColor = FColor::Yellow;
+
+		~FRenderBatch()
+		{
+			if (DirectResources)
+			{
+				DirectResources->BeginDeferredRelease();
+				OptimizedSkeletalMesh::FDirectMeshResources* ReleasedResources = DirectResources.Release();
+				check(ReleasedResources);
+			}
+		}
 	};
 
 	static FBox GetInstanceWorldBounds(const FOptimizedSkeletalMeshInstanceDesc& Desc)
@@ -180,6 +244,22 @@ namespace OptimizedSkeletalMesh
 			}
 		}
 	}
+
+	static const FSkeletalMeshLODRenderData* GetLODRenderData(const USkeletalMesh* SkeletalMesh, const int32 LODIndex)
+	{
+		if (!SkeletalMesh)
+		{
+			return nullptr;
+		}
+
+		const FSkeletalMeshRenderData* RenderData = SkeletalMesh->GetResourceForRendering();
+		if (!RenderData || !RenderData->LODRenderData.IsValidIndex(LODIndex))
+		{
+			return nullptr;
+		}
+
+		return &RenderData->LODRenderData[LODIndex];
+	}
 }
 
 class FOptimizedSkeletalMeshSceneProxy final : public FPrimitiveSceneProxy
@@ -189,6 +269,7 @@ public:
 		: FPrimitiveSceneProxy(Component)
 		, bDrawDebugBounds(Component->ShouldDrawDebugBounds())
 		, bDrawMeshSections(Component->ShouldDrawMeshSections())
+		, MeshDrawMode(Component->GetMeshDrawMode())
 		, MaxMeshDrawInstances(Component->GetMaxMeshDrawInstances())
 	{
 		if (const UWorld* World = Component->GetWorld())
@@ -233,10 +314,20 @@ public:
 				{
 					for (OptimizedSkeletalMesh::FRenderBatch& Batch : RenderBatches)
 					{
-						OptimizedSkeletalMesh::BuildCachedSectionMeshes(
-							Batch.Key.SkeletalMesh,
-							Batch.Key.LODIndex,
-							Batch.Sections);
+						Batch.LODRenderData = OptimizedSkeletalMesh::GetLODRenderData(Batch.Key.SkeletalMesh, Batch.Key.LODIndex);
+
+						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
+						{
+							OptimizedSkeletalMesh::BuildCachedSectionMeshes(
+								Batch.Key.SkeletalMesh,
+								Batch.Key.LODIndex,
+								Batch.Sections);
+						}
+						else if (Batch.LODRenderData)
+						{
+							Batch.DirectResources = MakeUnique<OptimizedSkeletalMesh::FDirectMeshResources>(GetScene().GetFeatureLevel());
+							Batch.DirectResources->Init(*Batch.LODRenderData);
+						}
 					}
 				}
 			}
@@ -271,28 +362,82 @@ public:
 						? Batch.Instances.Num()
 						: FMath::Min(MaxMeshDrawInstances, Batch.Instances.Num());
 
-					for (int32 InstanceIndex = 0; InstanceIndex < MeshDrawInstanceCount; ++InstanceIndex)
+					if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
 					{
-						for (const OptimizedSkeletalMesh::FCachedSectionMesh& Section : Batch.Sections)
+						for (int32 InstanceIndex = 0; InstanceIndex < MeshDrawInstanceCount; ++InstanceIndex)
 						{
-							if (!Section.MaterialRenderProxy || Section.Vertices.IsEmpty() || Section.Indices.IsEmpty())
+							for (const OptimizedSkeletalMesh::FCachedSectionMesh& Section : Batch.Sections)
 							{
-								continue;
-							}
+								if (!Section.MaterialRenderProxy || Section.Vertices.IsEmpty() || Section.Indices.IsEmpty())
+								{
+									continue;
+								}
 
-							FDynamicMeshBuilder MeshBuilder(Views[ViewIndex]->GetFeatureLevel());
-							MeshBuilder.ReserveVertices(Section.Vertices.Num());
-							MeshBuilder.ReserveTriangles(Section.Indices.Num() / 3);
-							MeshBuilder.AddVertices(Section.Vertices);
-							MeshBuilder.AddTriangles(Section.Indices);
-							MeshBuilder.GetMesh(
-								FMatrix(Batch.Instances[InstanceIndex].LocalToWorld),
-								Section.MaterialRenderProxy,
-								SDPG_World,
-								false,
-								true,
-								ViewIndex,
-								Collector);
+								FDynamicMeshBuilder MeshBuilder(Views[ViewIndex]->GetFeatureLevel());
+								MeshBuilder.ReserveVertices(Section.Vertices.Num());
+								MeshBuilder.ReserveTriangles(Section.Indices.Num() / 3);
+								MeshBuilder.AddVertices(Section.Vertices);
+								MeshBuilder.AddTriangles(Section.Indices);
+								MeshBuilder.GetMesh(
+									FMatrix(Batch.Instances[InstanceIndex].LocalToWorld),
+									Section.MaterialRenderProxy,
+									SDPG_World,
+									false,
+									true,
+									ViewIndex,
+									Collector);
+							}
+						}
+					}
+					else if (Batch.LODRenderData && Batch.DirectResources && Batch.DirectResources->bInitialized)
+					{
+						for (int32 InstanceIndex = 0; InstanceIndex < MeshDrawInstanceCount; ++InstanceIndex)
+						{
+							for (const FSkelMeshRenderSection& RenderSection : Batch.LODRenderData->RenderSections)
+							{
+								if (!RenderSection.IsValid())
+								{
+									continue;
+								}
+
+								const FMaterialRenderProxy* MaterialRenderProxy =
+									OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(Batch.Key.SkeletalMesh, RenderSection);
+								if (!MaterialRenderProxy)
+								{
+									continue;
+								}
+
+								FMeshBatch& Mesh = Collector.AllocateMesh();
+								Mesh.VertexFactory = &Batch.DirectResources->VertexFactory;
+								Mesh.MaterialRenderProxy = MaterialRenderProxy;
+								Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
+								Mesh.Type = PT_TriangleList;
+								Mesh.DepthPriorityGroup = SDPG_World;
+								Mesh.bCanApplyViewModeOverrides = false;
+								Mesh.CastShadow = false;
+
+								FMeshBatchElement& BatchElement = Mesh.Elements[0];
+								BatchElement.IndexBuffer = Batch.LODRenderData->MultiSizeIndexContainer.GetIndexBuffer();
+								BatchElement.FirstIndex = RenderSection.BaseIndex;
+								BatchElement.NumPrimitives = RenderSection.NumTriangles;
+								BatchElement.MinVertexIndex = RenderSection.BaseVertexIndex;
+								BatchElement.MaxVertexIndex = RenderSection.BaseVertexIndex + RenderSection.NumVertices - 1;
+								FDynamicPrimitiveUniformBuffer& DynamicPrimitiveUniformBuffer =
+									Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
+								const FMatrix InstanceLocalToWorld(Batch.Instances[InstanceIndex].LocalToWorld);
+								DynamicPrimitiveUniformBuffer.Set(
+									Collector.GetRHICommandList(),
+									InstanceLocalToWorld,
+									InstanceLocalToWorld,
+									Batch.Instances[InstanceIndex].WorldBounds,
+									GetLocalBounds(),
+									true,
+									false,
+									false);
+								BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
+
+								Collector.AddMesh(ViewIndex, Mesh);
+							}
 						}
 					}
 				}
@@ -345,6 +490,7 @@ private:
 	TArray<OptimizedSkeletalMesh::FRenderBatch> RenderBatches;
 	bool bDrawDebugBounds = true;
 	bool bDrawMeshSections = false;
+	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
 	int32 MaxMeshDrawInstances = 1;
 };
 
@@ -374,6 +520,12 @@ void UOptimizedSkeletalMeshRenderComponent::SetDrawDebugBounds(const bool bInDra
 void UOptimizedSkeletalMeshRenderComponent::SetDrawMeshSections(const bool bInDrawMeshSections)
 {
 	bDrawMeshSections = bInDrawMeshSections;
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetMeshDrawMode(const EOptimizedSkeletalMeshDrawMode InMeshDrawMode)
+{
+	MeshDrawMode = InMeshDrawMode;
 	RequestRenderRefresh();
 }
 

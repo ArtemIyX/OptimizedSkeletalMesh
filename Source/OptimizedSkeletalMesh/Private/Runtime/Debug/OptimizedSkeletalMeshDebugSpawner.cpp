@@ -61,6 +61,7 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 		PreviewRenderComponent->SetOptimizedSkeletalMeshSubsystem(Subsystem);
 		PreviewRenderComponent->SetDrawDebugBounds(bDrawDebugBounds);
 		PreviewRenderComponent->SetDrawMeshSections(bDrawMeshSections);
+		PreviewRenderComponent->SetMeshDrawMode(MeshDrawMode);
 		PreviewRenderComponent->SetMaxMeshDrawInstances(MaxMeshDrawInstances);
 	}
 
