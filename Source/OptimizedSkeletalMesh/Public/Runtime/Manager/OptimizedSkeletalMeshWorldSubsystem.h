@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "BoneContainer.h"
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "OptimizedSkeletalMeshWorldSubsystem.generated.h"
@@ -10,6 +11,13 @@ class USkeletalMesh;
 class UAnimSequence;
 class AActor;
 class UOptimizedSkeletalMeshRenderComponent;
+
+struct FOptimizedSkeletalMeshAnimationMeshCache
+{
+	TArray<FBoneIndexType> RequiredBoneIndices;
+	FBoneContainer RequiredBones;
+	TArray<FMatrix44f> RefBasesInvMatrices;
+};
 
 USTRUCT(BlueprintType)
 struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceHandle
@@ -86,6 +94,21 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshAnimationStats
 	int32 FinishedInstances = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 PoseEvaluatedInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 FailedPoseEvaluations = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 BonePaletteInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 TotalBoneMatrices = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 MaxBonesPerInstance = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
 	float LastDeltaTime = 0.0f;
 };
 
@@ -158,6 +181,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	FOptimizedSkeletalMeshAnimationStats GetLastAnimationStats() const;
 
+	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle Handle) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Animation")
+	int32 GetCachedBonePaletteCount() const;
+
 	bool IsRenderDataDirty() const
 	{
 		return bRenderDataDirty;
@@ -177,6 +205,8 @@ private:
 	bool IsValidInstanceId(int32 InstanceId) const;
 	void MarkRenderDataDirty();
 	void TickAnimation(float DeltaTime);
+	FOptimizedSkeletalMeshAnimationMeshCache* FindOrBuildAnimationMeshCache(USkeletalMesh* SkeletalMesh);
+	bool EvaluateInstanceBonePalette(const FOptimizedSkeletalMeshInstanceDesc& Desc, TArray<FMatrix44f>& OutBonePalette);
 	static float WrapAnimationTime(float AnimationTime, float SequenceLength);
 
 	UPROPERTY(Transient)
@@ -190,6 +220,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UOptimizedSkeletalMeshRenderComponent> RenderComponent = nullptr;
+
+	TMap<TObjectKey<USkeletalMesh>, FOptimizedSkeletalMeshAnimationMeshCache> AnimationMeshCaches;
+	TMap<int32, TArray<FMatrix44f>> InstanceBonePalettes;
 
 	int32 NextInstanceId = 1;
 	bool bRenderDataDirty = false;
