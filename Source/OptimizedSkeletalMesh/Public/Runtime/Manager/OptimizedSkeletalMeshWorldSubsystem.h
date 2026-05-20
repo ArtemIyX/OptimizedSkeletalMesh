@@ -7,6 +7,8 @@
 #include "OptimizedSkeletalMeshWorldSubsystem.generated.h"
 
 class USkeletalMesh;
+class AActor;
+class UOptimizedSkeletalMeshRenderComponent;
 
 USTRUCT(BlueprintType)
 struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceHandle
@@ -109,6 +111,8 @@ public:
 	}
 
 private:
+	void EnsureRenderBridge();
+	void DestroyRenderBridge();
 	int32 AllocateInstanceId();
 	bool IsValidInstanceId(int32 InstanceId) const;
 	void MarkRenderDataDirty();
@@ -118,6 +122,12 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<int32> FreeInstanceIds;
+
+	UPROPERTY(Transient)
+	TObjectPtr<AActor> RenderBridgeActor = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UOptimizedSkeletalMeshRenderComponent> RenderComponent = nullptr;
 
 	int32 NextInstanceId = 1;
 	bool bRenderDataDirty = false;

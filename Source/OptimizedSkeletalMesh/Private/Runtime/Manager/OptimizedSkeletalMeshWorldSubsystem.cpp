@@ -1,7 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "OptimizedSkeletalMeshWorldSubsystem.h"
+#include "Runtime/Manager/OptimizedSkeletalMeshWorldSubsystem.h"
 
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 #include "Stats/Stats.h"
 
 void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -12,10 +15,13 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	FreeInstanceIds.Reset();
 	NextInstanceId = 1;
 	bRenderDataDirty = false;
+	EnsureRenderBridge();
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 {
+	DestroyRenderBridge();
+
 	Instances.Reset();
 	FreeInstanceIds.Reset();
 	NextInstanceId = 1;
@@ -26,9 +32,15 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 
 void UOptimizedSkeletalMeshWorldSubsystem::Tick(float DeltaTime)
 {
-	// Future render bridge: collect visible instances, update GPU buffers, and notify the scene proxy.
+	EnsureRenderBridge();
+
 	if (bRenderDataDirty)
 	{
+		if (RenderComponent)
+		{
+			RenderComponent->RequestRenderRefresh();
+		}
+
 		ClearRenderDataDirty();
 	}
 }
@@ -50,6 +62,8 @@ FOptimizedSkeletalMeshInstanceHandle UOptimizedSkeletalMeshWorldSubsystem::Regis
 	{
 		return FOptimizedSkeletalMeshInstanceHandle();
 	}
+
+	EnsureRenderBridge();
 
 	const int32 InstanceId = AllocateInstanceId();
 	Instances.Add(InstanceId, Desc);
@@ -160,6 +174,65 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::GetInstanceCount() const
 	return Instances.Num();
 }
 
+void UOptimizedSkeletalMeshWorldSubsystem::EnsureRenderBridge()
+{
+	if (RenderComponent && RenderComponent->IsRegistered())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World || World->bIsTearingDown)
+	{
+		return;
+	}
+
+	if (!RenderBridgeActor)
+	{
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.Name = TEXT("OptimizedSkeletalMeshRenderBridge");
+		SpawnParameters.ObjectFlags |= RF_Transient;
+		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		RenderBridgeActor = World->SpawnActor<AActor>(SpawnParameters);
+		if (RenderBridgeActor)
+		{
+			RenderBridgeActor->SetCanBeDamaged(false);
+			RenderBridgeActor->SetActorEnableCollision(false);
+		}
+	}
+
+	if (RenderBridgeActor && !RenderComponent)
+	{
+		RenderComponent = NewObject<UOptimizedSkeletalMeshRenderComponent>(
+			RenderBridgeActor,
+			TEXT("OptimizedSkeletalMeshRenderComponent"),
+			RF_Transient);
+		RenderComponent->SetOptimizedSkeletalMeshSubsystem(this);
+		RenderBridgeActor->AddInstanceComponent(RenderComponent);
+		RenderComponent->RegisterComponentWithWorld(World);
+	}
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::DestroyRenderBridge()
+{
+	if (RenderComponent)
+	{
+		if (RenderComponent->IsRegistered())
+		{
+			RenderComponent->UnregisterComponent();
+		}
+
+		RenderComponent = nullptr;
+	}
+
+	if (RenderBridgeActor)
+	{
+		RenderBridgeActor->Destroy();
+		RenderBridgeActor = nullptr;
+	}
+}
+
 int32 UOptimizedSkeletalMeshWorldSubsystem::AllocateInstanceId()
 {
 	if (!FreeInstanceIds.IsEmpty())
@@ -178,4 +251,9 @@ bool UOptimizedSkeletalMeshWorldSubsystem::IsValidInstanceId(const int32 Instanc
 void UOptimizedSkeletalMeshWorldSubsystem::MarkRenderDataDirty()
 {
 	bRenderDataDirty = true;
+
+	if (RenderComponent)
+	{
+		RenderComponent->RequestRenderRefresh();
+	}
 }
