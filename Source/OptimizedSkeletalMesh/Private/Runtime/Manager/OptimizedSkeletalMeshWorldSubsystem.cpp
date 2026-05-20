@@ -8,6 +8,25 @@
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 #include "Stats/Stats.h"
 
+DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OptimizedSkeletalMesh Animation"), STATGROUP_OptimizedSkeletalMeshAnimation, STATCAT_Advanced);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Registered Instances"), STAT_OptimizedSkeletalMeshAnimationRegisteredInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Animated Instances"), STAT_OptimizedSkeletalMeshAnimationAnimatedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Advanced Instances"), STAT_OptimizedSkeletalMeshAnimationAdvancedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Finished Instances"), STAT_OptimizedSkeletalMeshAnimationFinishedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("Last Delta Seconds"), STAT_OptimizedSkeletalMeshAnimationLastDeltaSeconds, STATGROUP_OptimizedSkeletalMeshAnimation);
+
+namespace OptimizedSkeletalMesh
+{
+	static void PublishAnimationStats(const FOptimizedSkeletalMeshAnimationStats& InStats)
+	{
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationRegisteredInstances, InStats.RegisteredInstances);
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationAnimatedInstances, InStats.AnimatedInstances);
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationAdvancedInstances, InStats.AdvancedInstances);
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationFinishedInstances, InStats.FinishedInstances);
+		SET_FLOAT_STAT(STAT_OptimizedSkeletalMeshAnimationLastDeltaSeconds, InStats.LastDeltaTime);
+	}
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -17,6 +36,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	NextInstanceId = 1;
 	bRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
+	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 	EnsureRenderBridge();
 }
 
@@ -29,6 +49,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	NextInstanceId = 1;
 	bRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
+	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 
 	Super::Deinitialize();
 }
@@ -383,6 +404,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float DeltaTime)
 	if (DeltaTime <= 0.0f)
 	{
 		LastAnimationStats = NewStats;
+		OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 		return;
 	}
 
@@ -431,6 +453,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float DeltaTime)
 	}
 
 	LastAnimationStats = NewStats;
+	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 }
 
 float UOptimizedSkeletalMeshWorldSubsystem::WrapAnimationTime(

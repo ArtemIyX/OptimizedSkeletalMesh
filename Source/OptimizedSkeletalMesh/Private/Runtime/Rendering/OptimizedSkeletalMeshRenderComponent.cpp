@@ -24,24 +24,25 @@
 #include "SceneManagement.h"
 #include "Stats/Stats.h"
 
-DECLARE_STATS_GROUP(TEXT("OptimizedSkeletalMesh"), STATGROUP_OptimizedSkeletalMesh, STATCAT_Advanced);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Registered Instances"), STAT_OptimizedSkeletalMeshRegisteredInstances, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Tested Instances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible Instances"), STAT_OptimizedSkeletalMeshVisibleInstances, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Culled Instances"), STAT_OptimizedSkeletalMeshCulledInstances, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Drawn Instances"), STAT_OptimizedSkeletalMeshDrawnInstances, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Draw Calls"), STAT_OptimizedSkeletalMeshSubmittedDrawCalls, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Sections"), STAT_OptimizedSkeletalMeshSubmittedSections, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Triangles"), STAT_OptimizedSkeletalMeshSubmittedTriangles, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD0"), STAT_OptimizedSkeletalMeshVisibleLOD0, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD1"), STAT_OptimizedSkeletalMeshVisibleLOD1, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD2"), STAT_OptimizedSkeletalMeshVisibleLOD2, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD3"), STAT_OptimizedSkeletalMeshVisibleLOD3, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD4"), STAT_OptimizedSkeletalMeshVisibleLOD4, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD5"), STAT_OptimizedSkeletalMeshVisibleLOD5, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD6"), STAT_OptimizedSkeletalMeshVisibleLOD6, STATGROUP_OptimizedSkeletalMesh);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD7"), STAT_OptimizedSkeletalMeshVisibleLOD7, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OptimizedSkeletalMesh Rendering"), STATGROUP_OptimizedSkeletalMeshRendering, STATCAT_Advanced);
+DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OptimizedSkeletalMesh Visible LOD"), STATGROUP_OptimizedSkeletalMeshVisibleLOD, STATCAT_Advanced);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Registered Instances"), STAT_OptimizedSkeletalMeshRegisteredInstances, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Tested Instances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible Instances"), STAT_OptimizedSkeletalMeshVisibleInstances, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Culled Instances"), STAT_OptimizedSkeletalMeshCulledInstances, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Drawn Instances"), STAT_OptimizedSkeletalMeshDrawnInstances, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Draw Calls"), STAT_OptimizedSkeletalMeshSubmittedDrawCalls, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Sections"), STAT_OptimizedSkeletalMeshSubmittedSections, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Triangles"), STAT_OptimizedSkeletalMeshSubmittedTriangles, STATGROUP_OptimizedSkeletalMeshRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("LOD0"), STAT_OptimizedSkeletalMeshVisibleLOD0, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
+DECLARE_DWORD_COUNTER_STAT(TEXT("LOD1"), STAT_OptimizedSkeletalMeshVisibleLOD1, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
+DECLARE_DWORD_COUNTER_STAT(TEXT("LOD2"), STAT_OptimizedSkeletalMeshVisibleLOD2, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
+DECLARE_DWORD_COUNTER_STAT(TEXT("LOD3"), STAT_OptimizedSkeletalMeshVisibleLOD3, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
+DECLARE_DWORD_COUNTER_STAT(TEXT("LOD4"), STAT_OptimizedSkeletalMeshVisibleLOD4, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
+DECLARE_DWORD_COUNTER_STAT(TEXT("LOD5"), STAT_OptimizedSkeletalMeshVisibleLOD5, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
+DECLARE_DWORD_COUNTER_STAT(TEXT("LOD6"), STAT_OptimizedSkeletalMeshVisibleLOD6, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
+DECLARE_DWORD_COUNTER_STAT(TEXT("LOD7"), STAT_OptimizedSkeletalMeshVisibleLOD7, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
 
 namespace OptimizedSkeletalMesh
 {
