@@ -16,6 +16,45 @@ enum class EOptimizedSkeletalMeshDrawMode : uint8
 	DirectMeshBatch UMETA(DisplayName = "Direct Mesh Batch")
 };
 
+USTRUCT(BlueprintType)
+struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderStats
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 FrameNumber = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 RegisteredInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 MeshBatches = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 TestedInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 VisibleInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 CulledInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 DrawnInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SubmittedDrawCalls = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SubmittedSections = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SubmittedTriangles = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	TArray<int32> VisibleInstancesByLOD;
+};
+
 UCLASS(NotBlueprintable, ClassGroup = Rendering)
 class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshRenderComponent : public UPrimitiveComponent
 {
@@ -47,6 +86,8 @@ public:
 	float GetConservativeProxyBoundsExtent() const { return ConservativeProxyBoundsExtent; }
 	bool ShouldDrawCullingDebug() const { return bDrawCullingDebug; }
 	bool ShouldDrawCullTestBounds() const { return bDrawCullTestBounds; }
+	const FOptimizedSkeletalMeshRenderStats& GetLastRenderStats() const { return LastRenderStats; }
+	void ApplyRenderStats_GameThread(const FOptimizedSkeletalMeshRenderStats& InStats);
 
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
@@ -83,6 +124,9 @@ private:
 
 	UPROPERTY(Transient)
 	bool bDrawCullTestBounds = true;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats", meta = (AllowPrivateAccess = "true"))
+	FOptimizedSkeletalMeshRenderStats LastRenderStats;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UOptimizedSkeletalMeshWorldSubsystem> Subsystem = nullptr;

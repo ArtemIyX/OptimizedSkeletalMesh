@@ -15,7 +15,8 @@ namespace OptimizedSkeletalMesh::Debug
 
 AOptimizedSkeletalMeshDebugSpawner::AOptimizedSkeletalMeshDebugSpawner()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
 	SetCanBeDamaged(false);
 	SetActorEnableCollision(false);
 
@@ -32,6 +33,16 @@ void AOptimizedSkeletalMeshDebugSpawner::OnConstruction(const FTransform& Transf
 	if (bRebuildOnConstruction && World && World->WorldType == EWorldType::Editor)
 	{
 		RebuildInstances();
+	}
+}
+
+void AOptimizedSkeletalMeshDebugSpawner::Tick(const float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (PreviewRenderComponent)
+	{
+		LastRenderStats = PreviewRenderComponent->GetLastRenderStats();
 	}
 }
 
@@ -130,6 +141,7 @@ void AOptimizedSkeletalMeshDebugSpawner::ClearInstances()
 	SpawnedHandles.Reset();
 	SpawnedInstanceCount = 0;
 	VisibleRenderBatchCount = 0;
+	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
 
 	if (PreviewRenderComponent)
 	{

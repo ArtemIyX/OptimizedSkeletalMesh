@@ -19,6 +19,7 @@ public:
 	AOptimizedSkeletalMeshDebugSpawner();
 
 	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -84,6 +85,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Debug")
 	int32 VisibleRenderBatchCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	FOptimizedSkeletalMeshRenderStats LastRenderStats;
 
 private:
 	UOptimizedSkeletalMeshWorldSubsystem* GetOptimizedSubsystem() const;

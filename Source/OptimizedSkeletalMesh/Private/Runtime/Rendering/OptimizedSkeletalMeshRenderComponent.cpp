@@ -2,6 +2,7 @@
 
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 
+#include "Async/Async.h"
 #include "DynamicMeshBuilder.h"
 #include "ConvexVolume.h"
 #include "Engine/Engine.h"
@@ -21,6 +22,26 @@
 #include "Rendering/SkeletalMeshRenderData.h"
 #include "Runtime/Manager/OptimizedSkeletalMeshWorldSubsystem.h"
 #include "SceneManagement.h"
+#include "Stats/Stats.h"
+
+DECLARE_STATS_GROUP(TEXT("OptimizedSkeletalMesh"), STATGROUP_OptimizedSkeletalMesh, STATCAT_Advanced);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Registered Instances"), STAT_OptimizedSkeletalMeshRegisteredInstances, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Tested Instances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible Instances"), STAT_OptimizedSkeletalMeshVisibleInstances, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Culled Instances"), STAT_OptimizedSkeletalMeshCulledInstances, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Drawn Instances"), STAT_OptimizedSkeletalMeshDrawnInstances, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Draw Calls"), STAT_OptimizedSkeletalMeshSubmittedDrawCalls, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Sections"), STAT_OptimizedSkeletalMeshSubmittedSections, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Triangles"), STAT_OptimizedSkeletalMeshSubmittedTriangles, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD0"), STAT_OptimizedSkeletalMeshVisibleLOD0, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD1"), STAT_OptimizedSkeletalMeshVisibleLOD1, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD2"), STAT_OptimizedSkeletalMeshVisibleLOD2, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD3"), STAT_OptimizedSkeletalMeshVisibleLOD3, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD4"), STAT_OptimizedSkeletalMeshVisibleLOD4, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD5"), STAT_OptimizedSkeletalMeshVisibleLOD5, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD6"), STAT_OptimizedSkeletalMeshVisibleLOD6, STATGROUP_OptimizedSkeletalMesh);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible LOD7"), STAT_OptimizedSkeletalMeshVisibleLOD7, STATGROUP_OptimizedSkeletalMesh);
 
 namespace OptimizedSkeletalMesh
 {
@@ -125,6 +146,28 @@ namespace OptimizedSkeletalMesh
 	{
 		TArray<const FRenderInstance*> Instances;
 	};
+
+	static void AddVisibleLODStat(FOptimizedSkeletalMeshRenderStats& Stats, const int32 LODIndex, const int32 Count)
+	{
+		if (LODIndex < 0 || Count <= 0)
+		{
+			return;
+		}
+
+		if (Stats.VisibleInstancesByLOD.Num() <= LODIndex)
+		{
+			Stats.VisibleInstancesByLOD.SetNumZeroed(LODIndex + 1);
+		}
+
+		Stats.VisibleInstancesByLOD[LODIndex] += Count;
+	}
+
+	static int32 GetVisibleLODStat(const FOptimizedSkeletalMeshRenderStats& Stats, const int32 LODIndex)
+	{
+		return Stats.VisibleInstancesByLOD.IsValidIndex(LODIndex)
+			? Stats.VisibleInstancesByLOD[LODIndex]
+			: 0;
+	}
 
 	static const FSkeletalMeshLODRenderData* GetLODRenderData(const USkeletalMesh* SkeletalMesh, int32 LODIndex);
 
@@ -521,6 +564,7 @@ class FOptimizedSkeletalMeshSceneProxy final : public FPrimitiveSceneProxy
 public:
 	explicit FOptimizedSkeletalMeshSceneProxy(const UOptimizedSkeletalMeshRenderComponent* Component)
 		: FPrimitiveSceneProxy(Component)
+		, StatsComponent(const_cast<UOptimizedSkeletalMeshRenderComponent*>(Component))
 		, bDrawDebugBounds(Component->ShouldDrawDebugBounds())
 		, bDrawMeshSections(Component->ShouldDrawMeshSections())
 		, MeshDrawMode(Component->GetMeshDrawMode())
@@ -565,6 +609,7 @@ public:
 					RenderInstance.LocalToWorld = FMatrix44f(Snapshot.Desc.WorldTransform.ToMatrixWithScale());
 					RenderInstance.ForcedLODIndex = FMath::Max(0, Snapshot.Desc.LODIndex);
 					RenderInstance.bAutoLOD = Snapshot.Desc.bAutoLOD;
+					++RegisteredInstanceCount;
 				}
 
 				for (OptimizedSkeletalMesh::FMeshRenderBatch& Batch : MeshBatches)
@@ -621,6 +666,11 @@ public:
 				continue;
 			}
 
+			FOptimizedSkeletalMeshRenderStats FrameStats;
+			FrameStats.FrameNumber = static_cast<int32>(GFrameCounter);
+			FrameStats.RegisteredInstances = RegisteredInstanceCount;
+			FrameStats.MeshBatches = MeshBatches.Num();
+
 			const bool bIsWireframeView = ViewFamily.EngineShowFlags.Wireframe;
 			const bool bIsLODColorationView = ViewFamily.EngineShowFlags.LODColoration;
 			FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
@@ -635,6 +685,7 @@ public:
 
 					for (const OptimizedSkeletalMesh::FRenderInstance& Instance : Batch.Instances)
 					{
+						++FrameStats.TestedInstances;
 						const bool bInstanceVisibleInView = OptimizedSkeletalMesh::IsInstanceVisibleInView(
 							*Views[ViewIndex],
 							Instance,
@@ -665,9 +716,14 @@ public:
 
 						if (!bInstanceVisibleInView || (MaxMeshDrawInstances > 0 && DrawnMeshInstances >= MaxMeshDrawInstances))
 						{
+							if (!bInstanceVisibleInView)
+							{
+								++FrameStats.CulledInstances;
+							}
 							continue;
 						}
 
+						++FrameStats.VisibleInstances;
 						const int32 ChosenLODIndex = OptimizedSkeletalMesh::ChooseLODForView(
 							*Views[ViewIndex],
 							Batch.SkeletalMesh,
@@ -681,6 +737,8 @@ public:
 
 						VisibleInstancesByLOD[ChosenLODIndex].Instances.Add(&Instance);
 						++DrawnMeshInstances;
+						++FrameStats.DrawnInstances;
+						OptimizedSkeletalMesh::AddVisibleLODStat(FrameStats, ChosenLODIndex, 1);
 
 						if (bDrawDebugBounds && !bDrawCullingDebug)
 						{
@@ -777,6 +835,9 @@ public:
 							BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
 
 							Collector.AddMesh(ViewIndex, Mesh);
+							++FrameStats.SubmittedDrawCalls;
+							++FrameStats.SubmittedSections;
+							FrameStats.SubmittedTriangles += RenderSection.NumTriangles;
 						}
 					}
 
@@ -785,6 +846,7 @@ public:
 
 				for (const OptimizedSkeletalMesh::FRenderInstance& Instance : Batch.Instances)
 				{
+					++FrameStats.TestedInstances;
 					const bool bInstanceVisibleInView = OptimizedSkeletalMesh::IsInstanceVisibleInView(
 						*Views[ViewIndex],
 						Instance,
@@ -815,6 +877,7 @@ public:
 
 					if (!bInstanceVisibleInView)
 					{
+						++FrameStats.CulledInstances;
 						continue;
 					}
 
@@ -823,6 +886,7 @@ public:
 						Batch.SkeletalMesh,
 						Instance,
 						Batch.LODResources.Num());
+					++FrameStats.VisibleInstances;
 					const OptimizedSkeletalMesh::FLODResources* LODResources =
 						Batch.LODResources.IsValidIndex(ChosenLODIndex)
 							? Batch.LODResources[ChosenLODIndex].Get()
@@ -830,6 +894,9 @@ public:
 
 					if (bDrawMeshSections && LODResources && (MaxMeshDrawInstances <= 0 || DrawnMeshInstances < MaxMeshDrawInstances))
 					{
+						++FrameStats.VisibleInstances;
+						++FrameStats.DrawnInstances;
+						OptimizedSkeletalMesh::AddVisibleLODStat(FrameStats, ChosenLODIndex, 1);
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
 						{
 							for (const OptimizedSkeletalMesh::FCachedSectionMesh& Section : LODResources->Sections)
@@ -868,6 +935,9 @@ public:
 									nullptr,
 									ViewIndex,
 									Collector);
+								++FrameStats.SubmittedDrawCalls;
+								++FrameStats.SubmittedSections;
+								FrameStats.SubmittedTriangles += Section.Indices.Num() / 3;
 							}
 						}
 						else if (LODResources->LODRenderData && LODResources->DirectResources && LODResources->DirectResources->bInitialized)
@@ -921,6 +991,9 @@ public:
 								BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
 
 								Collector.AddMesh(ViewIndex, Mesh);
+								++FrameStats.SubmittedDrawCalls;
+								++FrameStats.SubmittedSections;
+								FrameStats.SubmittedTriangles += RenderSection.NumTriangles;
 							}
 						}
 
@@ -936,6 +1009,8 @@ public:
 					}
 				}
 			}
+
+			PublishRenderStats(FrameStats);
 		}
 	}
 
@@ -953,6 +1028,25 @@ public:
 	virtual uint32 GetMemoryFootprint() const override
 	{
 		return sizeof(*this) + GetOptimizedAllocatedSize();
+	}
+
+	void PublishRenderStats(const FOptimizedSkeletalMeshRenderStats& Stats) const
+	{
+		if (!StatsComponent.IsValid())
+		{
+			return;
+		}
+
+		const TWeakObjectPtr<UOptimizedSkeletalMeshRenderComponent> WeakStatsComponent = StatsComponent;
+		AsyncTask(
+			ENamedThreads::GameThread,
+			[WeakStatsComponent, Stats]()
+			{
+				if (UOptimizedSkeletalMeshRenderComponent* Component = WeakStatsComponent.Get())
+				{
+					Component->ApplyRenderStats_GameThread(Stats);
+				}
+			});
 	}
 
 	uint32 GetOptimizedAllocatedSize() const
@@ -983,7 +1077,9 @@ public:
 	}
 
 private:
+	TWeakObjectPtr<UOptimizedSkeletalMeshRenderComponent> StatsComponent;
 	TArray<OptimizedSkeletalMesh::FMeshRenderBatch> MeshBatches;
+	int32 RegisteredInstanceCount = 0;
 	bool bDrawDebugBounds = true;
 	bool bDrawMeshSections = false;
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
@@ -1069,6 +1165,31 @@ void UOptimizedSkeletalMeshRenderComponent::SetDrawCullTestBounds(const bool bIn
 {
 	bDrawCullTestBounds = bInDrawCullTestBounds;
 	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(
+	const FOptimizedSkeletalMeshRenderStats& InStats)
+{
+	check(IsInGameThread());
+	LastRenderStats = InStats;
+
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshRegisteredInstances, InStats.RegisteredInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshMeshBatches, InStats.MeshBatches);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshTestedInstances, InStats.TestedInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleInstances, InStats.VisibleInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshCulledInstances, InStats.CulledInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshDrawnInstances, InStats.DrawnInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSubmittedDrawCalls, InStats.SubmittedDrawCalls);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSubmittedSections, InStats.SubmittedSections);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSubmittedTriangles, InStats.SubmittedTriangles);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD0, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 0));
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD1, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 1));
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD2, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 2));
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD3, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 3));
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD4, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 4));
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD5, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 5));
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD6, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 6));
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD7, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 7));
 }
 
 void UOptimizedSkeletalMeshRenderComponent::RequestRenderRefresh()
