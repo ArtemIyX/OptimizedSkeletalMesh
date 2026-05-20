@@ -228,7 +228,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::EnsureRenderBridge()
 	if (!RenderBridgeActor)
 	{
 		FActorSpawnParameters SpawnParameters;
-		SpawnParameters.Name = TEXT("OptimizedSkeletalMeshRenderBridge");
+		SpawnParameters.Name = MakeUniqueObjectName(World->PersistentLevel, AActor::StaticClass(), TEXT("OptimizedSkeletalMeshRenderBridge"));
 		SpawnParameters.ObjectFlags |= RF_Transient;
 		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 

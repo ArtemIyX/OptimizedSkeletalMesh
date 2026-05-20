@@ -51,15 +51,17 @@ void AOptimizedSkeletalMeshDebugSpawner::EndPlay(const EEndPlayReason::Type EndP
 
 void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 {
-	ClearInstances();
-
-	if (!SkeletalMesh)
+	UOptimizedSkeletalMeshWorldSubsystem* Subsystem = GetOptimizedSubsystem();
+	if (!Subsystem)
 	{
 		return;
 	}
 
-	UOptimizedSkeletalMeshWorldSubsystem* Subsystem = GetOptimizedSubsystem();
-	if (!Subsystem)
+	Subsystem->SetExternalRenderBridgeActive(PreviewRenderComponent != nullptr);
+
+	ClearInstances();
+
+	if (!SkeletalMesh)
 	{
 		return;
 	}
@@ -109,12 +111,13 @@ void AOptimizedSkeletalMeshDebugSpawner::ClearInstances()
 {
 	if (UOptimizedSkeletalMeshWorldSubsystem* Subsystem = GetOptimizedSubsystem())
 	{
+		const bool bUsePreviewRenderBridge = PreviewRenderComponent != nullptr;
+		Subsystem->SetExternalRenderBridgeActive(bUsePreviewRenderBridge);
+
 		for (const FOptimizedSkeletalMeshInstanceHandle& Handle : SpawnedHandles)
 		{
 			Subsystem->UnregisterInstance(Handle);
 		}
-
-		Subsystem->SetExternalRenderBridgeActive(false);
 	}
 
 	SpawnedHandles.Reset();
