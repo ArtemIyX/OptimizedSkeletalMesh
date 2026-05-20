@@ -44,6 +44,11 @@ void AOptimizedSkeletalMeshDebugSpawner::Tick(const float DeltaSeconds)
 	{
 		LastRenderStats = PreviewRenderComponent->GetLastRenderStats();
 	}
+
+	if (const UOptimizedSkeletalMeshWorldSubsystem* Subsystem = GetOptimizedSubsystem())
+	{
+		LastAnimationStats = Subsystem->GetLastAnimationStats();
+	}
 }
 
 void AOptimizedSkeletalMeshDebugSpawner::BeginPlay()
@@ -105,7 +110,11 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 			Desc.WorldTransform = GetInstanceTransform(X, Y);
 			Desc.LODIndex = ForcedLODIndex;
 			Desc.bAutoLOD = bAutoLOD;
-			Desc.AnimationTime = 0.0f;
+			Desc.Animation = Animation;
+			Desc.AnimationTime = AnimationStartTime;
+			Desc.AnimationPlayRate = AnimationPlayRate;
+			Desc.bLoopAnimation = bLoopAnimation;
+			Desc.bPlayAnimation = bPlayAnimation;
 			Desc.bVisible = true;
 
 			const FOptimizedSkeletalMeshInstanceHandle Handle = Subsystem->RegisterInstance(Desc);
@@ -142,6 +151,7 @@ void AOptimizedSkeletalMeshDebugSpawner::ClearInstances()
 	SpawnedInstanceCount = 0;
 	VisibleRenderBatchCount = 0;
 	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
+	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 
 	if (PreviewRenderComponent)
 	{

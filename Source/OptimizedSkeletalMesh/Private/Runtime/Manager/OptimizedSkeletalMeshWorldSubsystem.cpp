@@ -2,6 +2,7 @@
 
 #include "Runtime/Manager/OptimizedSkeletalMeshWorldSubsystem.h"
 
+#include "Animation/AnimSequence.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
@@ -15,6 +16,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	FreeInstanceIds.Reset();
 	NextInstanceId = 1;
 	bRenderDataDirty = false;
+	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	EnsureRenderBridge();
 }
 
@@ -26,6 +28,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	FreeInstanceIds.Reset();
 	NextInstanceId = 1;
 	bRenderDataDirty = false;
+	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 
 	Super::Deinitialize();
 }
@@ -33,6 +36,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 void UOptimizedSkeletalMeshWorldSubsystem::Tick(float DeltaTime)
 {
 	EnsureRenderBridge();
+	TickAnimation(DeltaTime);
 
 	if (bRenderDataDirty)
 	{
@@ -120,6 +124,34 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UpdateInstanceTransform(
 	Instance->WorldTransform = WorldTransform;
 	MarkRenderDataDirty();
 
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::UpdateInstanceAnimationTime(
+	FOptimizedSkeletalMeshInstanceHandle Handle,
+	const float AnimationTime)
+{
+	FOptimizedSkeletalMeshInstanceDesc* Instance = Instances.Find(Handle.Id);
+	if (!Instance)
+	{
+		return false;
+	}
+
+	Instance->AnimationTime = FMath::Max(0.0f, AnimationTime);
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationPlaying(
+	FOptimizedSkeletalMeshInstanceHandle Handle,
+	const bool bPlaying)
+{
+	FOptimizedSkeletalMeshInstanceDesc* Instance = Instances.Find(Handle.Id);
+	if (!Instance)
+	{
+		return false;
+	}
+
+	Instance->bPlayAnimation = bPlaying;
 	return true;
 }
 
@@ -234,6 +266,11 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::GetVisibleRenderBatchCount() const
 	return VisibleMeshes.Num();
 }
 
+FOptimizedSkeletalMeshAnimationStats UOptimizedSkeletalMeshWorldSubsystem::GetLastAnimationStats() const
+{
+	return LastAnimationStats;
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::SetExternalRenderBridgeActive(const bool bInActive)
 {
 	bExternalRenderBridgeActive = bInActive;
@@ -335,4 +372,81 @@ void UOptimizedSkeletalMeshWorldSubsystem::MarkRenderDataDirty()
 	{
 		RenderComponent->RequestRenderRefresh();
 	}
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float DeltaTime)
+{
+	FOptimizedSkeletalMeshAnimationStats NewStats;
+	NewStats.RegisteredInstances = Instances.Num();
+	NewStats.LastDeltaTime = DeltaTime;
+
+	if (DeltaTime <= 0.0f)
+	{
+		LastAnimationStats = NewStats;
+		return;
+	}
+
+	for (TPair<int32, FOptimizedSkeletalMeshInstanceDesc>& Pair : Instances)
+	{
+		FOptimizedSkeletalMeshInstanceDesc& Desc = Pair.Value;
+		if (!Desc.Animation)
+		{
+			continue;
+		}
+
+		++NewStats.AnimatedInstances;
+
+		if (!Desc.bPlayAnimation || FMath::IsNearlyZero(Desc.AnimationPlayRate))
+		{
+			continue;
+		}
+
+		const float SequenceLength = Desc.Animation->GetPlayLength();
+		if (SequenceLength <= 0.0f)
+		{
+			continue;
+		}
+
+		const float PreviousTime = Desc.AnimationTime;
+		const float AdvancedTime = PreviousTime + DeltaTime * Desc.AnimationPlayRate;
+
+		if (Desc.bLoopAnimation)
+		{
+			Desc.AnimationTime = WrapAnimationTime(AdvancedTime, SequenceLength);
+		}
+		else
+		{
+			Desc.AnimationTime = FMath::Clamp(AdvancedTime, 0.0f, SequenceLength);
+			if (Desc.AnimationTime <= 0.0f || Desc.AnimationTime >= SequenceLength)
+			{
+				Desc.bPlayAnimation = false;
+				++NewStats.FinishedInstances;
+			}
+		}
+
+		if (!FMath::IsNearlyEqual(PreviousTime, Desc.AnimationTime))
+		{
+			++NewStats.AdvancedInstances;
+		}
+	}
+
+	LastAnimationStats = NewStats;
+}
+
+float UOptimizedSkeletalMeshWorldSubsystem::WrapAnimationTime(
+	const float AnimationTime,
+	const float SequenceLength)
+{
+	if (SequenceLength <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	float WrappedTime = FMath::Fmod(AnimationTime, SequenceLength);
+	if (WrappedTime < 0.0f)
+	{
+		WrappedTime += SequenceLength;
+	}
+
+	return WrappedTime;
 }

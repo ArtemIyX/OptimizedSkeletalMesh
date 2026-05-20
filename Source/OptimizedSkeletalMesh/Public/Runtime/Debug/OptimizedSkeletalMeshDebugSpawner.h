@@ -9,6 +9,7 @@
 #include "OptimizedSkeletalMeshDebugSpawner.generated.h"
 
 class USkeletalMesh;
+class UAnimSequence;
 
 UCLASS(Blueprintable)
 class OPTIMIZEDSKELETALMESH_API AOptimizedSkeletalMeshDebugSpawner : public AActor
@@ -31,6 +32,21 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug")
 	TObjectPtr<USkeletalMesh> SkeletalMesh = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	TObjectPtr<UAnimSequence> Animation = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	float AnimationStartTime = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	float AnimationPlayRate = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	bool bLoopAnimation = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	bool bPlayAnimation = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "1"))
 	int32 CountX = 25;
@@ -88,6 +104,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
 	FOptimizedSkeletalMeshRenderStats LastRenderStats;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;
 
 private:
 	UOptimizedSkeletalMeshWorldSubsystem* GetOptimizedSubsystem() const;

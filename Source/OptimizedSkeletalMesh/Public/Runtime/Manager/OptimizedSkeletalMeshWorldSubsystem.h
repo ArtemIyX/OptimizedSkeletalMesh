@@ -7,6 +7,7 @@
 #include "OptimizedSkeletalMeshWorldSubsystem.generated.h"
 
 class USkeletalMesh;
+class UAnimSequence;
 class AActor;
 class UOptimizedSkeletalMeshRenderComponent;
 
@@ -48,11 +49,44 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceDesc
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh")
 	bool bAutoLOD = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	TObjectPtr<UAnimSequence> Animation = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh")
 	float AnimationTime = 0.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	float AnimationPlayRate = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	bool bLoopAnimation = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
+	bool bPlayAnimation = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh")
 	bool bVisible = true;
+};
+
+USTRUCT(BlueprintType)
+struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshAnimationStats
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 RegisteredInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 AnimatedInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 AdvancedInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 FinishedInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	float LastDeltaTime = 0.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -92,6 +126,12 @@ public:
 	bool UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle Handle, const FTransform& WorldTransform);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool UpdateInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle Handle, float AnimationTime);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceAnimationPlaying(FOptimizedSkeletalMeshInstanceHandle Handle, bool bPlaying);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool SetInstanceVisible(FOptimizedSkeletalMeshInstanceHandle Handle, bool bVisible);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
@@ -115,6 +155,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	int32 GetVisibleRenderBatchCount() const;
 
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	FOptimizedSkeletalMeshAnimationStats GetLastAnimationStats() const;
+
 	bool IsRenderDataDirty() const
 	{
 		return bRenderDataDirty;
@@ -133,6 +176,8 @@ private:
 	int32 AllocateInstanceId();
 	bool IsValidInstanceId(int32 InstanceId) const;
 	void MarkRenderDataDirty();
+	void TickAnimation(float DeltaTime);
+	static float WrapAnimationTime(float AnimationTime, float SequenceLength);
 
 	UPROPERTY(Transient)
 	TMap<int32, FOptimizedSkeletalMeshInstanceDesc> Instances;
@@ -149,4 +194,5 @@ private:
 	int32 NextInstanceId = 1;
 	bool bRenderDataDirty = false;
 	bool bExternalRenderBridgeActive = false;
+	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;
 };
