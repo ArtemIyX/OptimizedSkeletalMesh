@@ -76,6 +76,10 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float DeltaTime)
 {
 	EnsureRenderBridge();
 	TickAnimation(DeltaTime);
+	if (RenderComponent)
+	{
+		RenderComponent->PushBonePalettesToRenderThread();
+	}
 
 	if (bRenderDataDirty)
 	{
@@ -315,6 +319,25 @@ const TArray<FMatrix44f>* UOptimizedSkeletalMeshWorldSubsystem::GetInstanceBoneP
 	const FOptimizedSkeletalMeshInstanceHandle Handle) const
 {
 	return InstanceBonePalettes.Find(Handle.Id);
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::GetBonePaletteSnapshots(
+	TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& OutSnapshots) const
+{
+	OutSnapshots.Reset(InstanceBonePalettes.Num());
+
+	for (const TPair<int32, TArray<FMatrix44f>>& Pair : InstanceBonePalettes)
+	{
+		FOptimizedSkeletalMeshBonePaletteSnapshot& Snapshot = OutSnapshots.AddDefaulted_GetRef();
+		Snapshot.Handle = FOptimizedSkeletalMeshInstanceHandle(Pair.Key);
+		Snapshot.BonePalette = Pair.Value;
+	}
+
+	OutSnapshots.Sort(
+		[](const FOptimizedSkeletalMeshBonePaletteSnapshot& Left, const FOptimizedSkeletalMeshBonePaletteSnapshot& Right)
+		{
+			return Left.Handle.Id < Right.Handle.Id;
+		});
 }
 
 int32 UOptimizedSkeletalMeshWorldSubsystem::GetCachedBonePaletteCount() const

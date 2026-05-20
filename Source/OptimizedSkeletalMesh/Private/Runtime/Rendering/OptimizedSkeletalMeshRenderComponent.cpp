@@ -26,6 +26,7 @@
 
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OptimizedSkeletalMesh Rendering"), STATGROUP_OptimizedSkeletalMeshRendering, STATCAT_Advanced);
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OptimizedSkeletalMesh Visible LOD"), STATGROUP_OptimizedSkeletalMeshVisibleLOD, STATCAT_Advanced);
+DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OptimizedSkeletalMesh Skinning"), STATGROUP_OptimizedSkeletalMeshSkinning, STATCAT_Advanced);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Registered Instances"), STAT_OptimizedSkeletalMeshRegisteredInstances, STATGROUP_OptimizedSkeletalMeshRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OptimizedSkeletalMeshRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Tested Instances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OptimizedSkeletalMeshRendering);
@@ -43,6 +44,9 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("LOD4"), STAT_OptimizedSkeletalMeshVisibleLOD4, 
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD5"), STAT_OptimizedSkeletalMeshVisibleLOD5, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD6"), STAT_OptimizedSkeletalMeshVisibleLOD6, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD7"), STAT_OptimizedSkeletalMeshVisibleLOD7, STATGROUP_OptimizedSkeletalMeshVisibleLOD);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Palette Instances"), STAT_OptimizedSkeletalMeshSkinningPaletteInstances, STATGROUP_OptimizedSkeletalMeshSkinning);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Palette Matrices"), STAT_OptimizedSkeletalMeshSkinningPaletteMatrices, STATGROUP_OptimizedSkeletalMeshSkinning);
+DECLARE_MEMORY_STAT(TEXT("Palette Memory"), STAT_OptimizedSkeletalMeshSkinningPaletteBytes, STATGROUP_OptimizedSkeletalMeshSkinning);
 
 namespace OptimizedSkeletalMesh
 {
@@ -50,10 +54,17 @@ namespace OptimizedSkeletalMesh
 
 	struct FRenderInstance
 	{
+		int32 InstanceId = INDEX_NONE;
 		FBox WorldBounds;
 		FMatrix44f LocalToWorld = FMatrix44f::Identity;
 		int32 ForcedLODIndex = 0;
 		bool bAutoLOD = true;
+	};
+
+	struct FBonePaletteRenderSnapshot
+	{
+		int32 InstanceId = INDEX_NONE;
+		TArray<FMatrix44f> BonePalette;
 	};
 
 	struct FCachedSectionMesh
@@ -606,6 +617,7 @@ public:
 
 					OptimizedSkeletalMesh::FMeshRenderBatch& Batch = MeshBatches[*ExistingBatchIndex];
 					OptimizedSkeletalMesh::FRenderInstance& RenderInstance = Batch.Instances.AddDefaulted_GetRef();
+					RenderInstance.InstanceId = Snapshot.Handle.Id;
 					RenderInstance.WorldBounds = OptimizedSkeletalMesh::GetInstanceWorldBounds(Snapshot.Desc);
 					RenderInstance.LocalToWorld = FMatrix44f(Snapshot.Desc.WorldTransform.ToMatrixWithScale());
 					RenderInstance.ForcedLODIndex = FMath::Max(0, Snapshot.Desc.LODIndex);
@@ -671,6 +683,9 @@ public:
 			FrameStats.FrameNumber = static_cast<int32>(GFrameCounter);
 			FrameStats.RegisteredInstances = RegisteredInstanceCount;
 			FrameStats.MeshBatches = MeshBatches.Num();
+			FrameStats.SkinningPaletteInstances = SkinningPaletteInstances;
+			FrameStats.SkinningPaletteMatrices = SkinningPaletteMatrices;
+			FrameStats.SkinningPaletteBytes = SkinningPaletteBytes;
 
 			const bool bIsWireframeView = ViewFamily.EngineShowFlags.Wireframe;
 			const bool bIsLODColorationView = ViewFamily.EngineShowFlags.LODColoration;
@@ -1049,6 +1064,25 @@ public:
 			});
 	}
 
+	void UpdateBonePalettes_RenderThread(TArray<OptimizedSkeletalMesh::FBonePaletteRenderSnapshot>&& InSnapshots)
+	{
+		check(IsInRenderingThread());
+
+		BonePalettesByInstanceId.Reset();
+		BonePalettesByInstanceId.Reserve(InSnapshots.Num());
+		SkinningPaletteMatrices = 0;
+		SkinningPaletteBytes = 0;
+
+		for (OptimizedSkeletalMesh::FBonePaletteRenderSnapshot& Snapshot : InSnapshots)
+		{
+			SkinningPaletteMatrices += Snapshot.BonePalette.Num();
+			SkinningPaletteBytes += Snapshot.BonePalette.Num() * sizeof(FMatrix44f);
+			BonePalettesByInstanceId.Add(Snapshot.InstanceId, MoveTemp(Snapshot.BonePalette));
+		}
+
+		SkinningPaletteInstances = BonePalettesByInstanceId.Num();
+	}
+
 	uint32 GetOptimizedAllocatedSize() const
 	{
 		SIZE_T AllocatedSize = FPrimitiveSceneProxy::GetAllocatedSize() + MeshBatches.GetAllocatedSize();
@@ -1073,13 +1107,23 @@ public:
 			}
 		}
 
+		AllocatedSize += BonePalettesByInstanceId.GetAllocatedSize();
+		for (const TPair<int32, TArray<FMatrix44f>>& Pair : BonePalettesByInstanceId)
+		{
+			AllocatedSize += Pair.Value.GetAllocatedSize();
+		}
+
 		return IntCastChecked<uint32>(AllocatedSize);
 	}
 
 private:
 	TWeakObjectPtr<UOptimizedSkeletalMeshRenderComponent> StatsComponent;
 	TArray<OptimizedSkeletalMesh::FMeshRenderBatch> MeshBatches;
+	TMap<int32, TArray<FMatrix44f>> BonePalettesByInstanceId;
 	int32 RegisteredInstanceCount = 0;
+	int32 SkinningPaletteInstances = 0;
+	int32 SkinningPaletteMatrices = 0;
+	int32 SkinningPaletteBytes = 0;
 	bool bDrawDebugBounds = true;
 	bool bDrawMeshSections = false;
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
@@ -1167,6 +1211,43 @@ void UOptimizedSkeletalMeshRenderComponent::SetDrawCullTestBounds(const bool bIn
 	RequestRenderRefresh();
 }
 
+void UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
+{
+	check(IsInGameThread());
+
+	if (!Subsystem || !SceneProxy)
+	{
+		return;
+	}
+
+	TArray<FOptimizedSkeletalMeshBonePaletteSnapshot> PaletteSnapshots;
+	Subsystem->GetBonePaletteSnapshots(PaletteSnapshots);
+
+	TArray<OptimizedSkeletalMesh::FBonePaletteRenderSnapshot> RenderSnapshots;
+	RenderSnapshots.Reserve(PaletteSnapshots.Num());
+
+	for (FOptimizedSkeletalMeshBonePaletteSnapshot& Snapshot : PaletteSnapshots)
+	{
+		if (!Snapshot.Handle.IsValid() || Snapshot.BonePalette.IsEmpty())
+		{
+			continue;
+		}
+
+		OptimizedSkeletalMesh::FBonePaletteRenderSnapshot& RenderSnapshot = RenderSnapshots.AddDefaulted_GetRef();
+		RenderSnapshot.InstanceId = Snapshot.Handle.Id;
+		RenderSnapshot.BonePalette = MoveTemp(Snapshot.BonePalette);
+	}
+
+	FOptimizedSkeletalMeshSceneProxy* OptimizedSceneProxy =
+		static_cast<FOptimizedSkeletalMeshSceneProxy*>(SceneProxy);
+
+	ENQUEUE_RENDER_COMMAND(UpdateOptimizedSkeletalMeshBonePalettes)(
+		[OptimizedSceneProxy, RenderSnapshots = MoveTemp(RenderSnapshots)](FRHICommandListImmediate& RHICmdList) mutable
+		{
+			OptimizedSceneProxy->UpdateBonePalettes_RenderThread(MoveTemp(RenderSnapshots));
+		});
+}
+
 void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(
 	const FOptimizedSkeletalMeshRenderStats& InStats)
 {
@@ -1182,6 +1263,9 @@ void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSubmittedDrawCalls, InStats.SubmittedDrawCalls);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSubmittedSections, InStats.SubmittedSections);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSubmittedTriangles, InStats.SubmittedTriangles);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningPaletteInstances, InStats.SkinningPaletteInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningPaletteMatrices, InStats.SkinningPaletteMatrices);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningPaletteBytes, InStats.SkinningPaletteBytes);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD0, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 0));
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD1, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 1));
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD2, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 2));

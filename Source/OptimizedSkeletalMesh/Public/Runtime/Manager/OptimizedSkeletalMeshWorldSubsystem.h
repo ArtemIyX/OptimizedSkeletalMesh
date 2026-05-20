@@ -124,6 +124,12 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceSnapshot
 	FOptimizedSkeletalMeshInstanceDesc Desc;
 };
 
+struct FOptimizedSkeletalMeshBonePaletteSnapshot
+{
+	FOptimizedSkeletalMeshInstanceHandle Handle;
+	TArray<FMatrix44f> BonePalette;
+};
+
 UCLASS()
 class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshWorldSubsystem : public UTickableWorldSubsystem
 {
@@ -182,6 +188,7 @@ public:
 	FOptimizedSkeletalMeshAnimationStats GetLastAnimationStats() const;
 
 	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle Handle) const;
+	void GetBonePaletteSnapshots(TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& OutSnapshots) const;
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Animation")
 	int32 GetCachedBonePaletteCount() const;

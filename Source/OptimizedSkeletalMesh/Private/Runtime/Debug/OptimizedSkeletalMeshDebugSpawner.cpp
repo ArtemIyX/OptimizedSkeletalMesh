@@ -42,6 +42,7 @@ void AOptimizedSkeletalMeshDebugSpawner::Tick(const float DeltaSeconds)
 
 	if (PreviewRenderComponent)
 	{
+		PreviewRenderComponent->PushBonePalettesToRenderThread();
 		LastRenderStats = PreviewRenderComponent->GetLastRenderStats();
 	}
 

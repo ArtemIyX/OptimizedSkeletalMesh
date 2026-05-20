@@ -53,6 +53,15 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderStats
 	int32 SubmittedTriangles = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningPaletteInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningPaletteMatrices = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningPaletteBytes = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
 	TArray<int32> VisibleInstancesByLOD;
 };
 
@@ -76,6 +85,7 @@ public:
 	void SetDrawCullingDebug(bool bInDrawCullingDebug);
 	void SetDrawCullTestBounds(bool bInDrawCullTestBounds);
 	void RequestRenderRefresh();
+	void PushBonePalettesToRenderThread();
 
 	bool ShouldDrawDebugBounds() const { return bDrawDebugBounds; }
 	bool ShouldDrawMeshSections() const { return bDrawMeshSections; }
