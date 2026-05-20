@@ -7,6 +7,7 @@
 #include "Engine/Engine.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
+#include "InstanceUniformShaderParameters.h"
 #include "LocalVertexFactory.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
@@ -120,6 +121,11 @@ namespace OptimizedSkeletalMesh
 		TArray<TUniquePtr<FLODResources>> LODResources;
 	};
 
+	struct FVisibleLODInstances
+	{
+		TArray<const FRenderInstance*> Instances;
+	};
+
 	static const FSkeletalMeshLODRenderData* GetLODRenderData(const USkeletalMesh* SkeletalMesh, int32 LODIndex);
 
 	static FBox GetInstanceWorldBounds(const FOptimizedSkeletalMeshInstanceDesc& Desc)
@@ -226,6 +232,47 @@ namespace OptimizedSkeletalMesh
 		}
 
 		return DoesClipSpaceBoxIntersectView(View, GetCullTestBounds(Instance, InstanceCullBoundsScale));
+	}
+
+	static void BuildDynamicPrimitiveInstanceData(
+		FMeshElementCollector& Collector,
+		TConstArrayView<const FRenderInstance*> Instances,
+		FMeshBatchDynamicPrimitiveData*& OutDynamicPrimitiveData,
+		FBox& OutWorldBounds)
+	{
+		OutDynamicPrimitiveData = nullptr;
+		OutWorldBounds = FBox(ForceInit);
+
+		if (Instances.IsEmpty())
+		{
+			return;
+		}
+
+		TArray<FInstanceSceneData>& InstanceSceneData =
+			Collector.AllocateOneFrameResource<TArray<FInstanceSceneData>>();
+		InstanceSceneData.Reserve(Instances.Num());
+
+		for (const FRenderInstance* Instance : Instances)
+		{
+			if (!Instance)
+			{
+				continue;
+			}
+
+			FInstanceSceneData& SceneData = InstanceSceneData.AddDefaulted_GetRef();
+			SceneData.LocalToPrimitive = FRenderTransform(Instance->LocalToWorld);
+			OutWorldBounds += Instance->WorldBounds;
+		}
+
+		if (InstanceSceneData.IsEmpty())
+		{
+			return;
+		}
+
+		FMeshBatchDynamicPrimitiveData& DynamicPrimitiveData =
+			Collector.AllocateOneFrameResource<FMeshBatchDynamicPrimitiveData>();
+		DynamicPrimitiveData.InstanceSceneData = MakeArrayView(InstanceSceneData);
+		OutDynamicPrimitiveData = &DynamicPrimitiveData;
 	}
 
 	static FColor GetBatchDebugColor(const int32 BatchIndex)
@@ -581,6 +628,161 @@ public:
 
 			for (const OptimizedSkeletalMesh::FMeshRenderBatch& Batch : MeshBatches)
 			{
+				if (bDrawMeshSections && MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DirectMeshBatch)
+				{
+					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> VisibleInstancesByLOD;
+					VisibleInstancesByLOD.SetNum(Batch.LODResources.Num());
+
+					for (const OptimizedSkeletalMesh::FRenderInstance& Instance : Batch.Instances)
+					{
+						const bool bInstanceVisibleInView = OptimizedSkeletalMesh::IsInstanceVisibleInView(
+							*Views[ViewIndex],
+							Instance,
+							bEnableInstanceFrustumCulling,
+							InstanceCullBoundsScale);
+
+						if (bDrawCullingDebug)
+						{
+							DrawWireBox(
+								PDI,
+								Instance.WorldBounds,
+								bInstanceVisibleInView ? FColor::Green : FColor::Red,
+								SDPG_Foreground);
+
+							if (bDrawCullTestBounds)
+							{
+								const FBox CullTestBounds = OptimizedSkeletalMesh::GetCullTestBounds(Instance, InstanceCullBoundsScale);
+								if (CullTestBounds.IsValid)
+								{
+									DrawWireBox(
+										PDI,
+										CullTestBounds,
+										bInstanceVisibleInView ? FColor::Cyan : FColor::Orange,
+										SDPG_Foreground);
+								}
+							}
+						}
+
+						if (!bInstanceVisibleInView || (MaxMeshDrawInstances > 0 && DrawnMeshInstances >= MaxMeshDrawInstances))
+						{
+							continue;
+						}
+
+						const int32 ChosenLODIndex = OptimizedSkeletalMesh::ChooseLODForView(
+							*Views[ViewIndex],
+							Batch.SkeletalMesh,
+							Instance,
+							Batch.LODResources.Num());
+
+						if (!VisibleInstancesByLOD.IsValidIndex(ChosenLODIndex))
+						{
+							continue;
+						}
+
+						VisibleInstancesByLOD[ChosenLODIndex].Instances.Add(&Instance);
+						++DrawnMeshInstances;
+
+						if (bDrawDebugBounds && !bDrawCullingDebug)
+						{
+							const OptimizedSkeletalMesh::FLODResources* LODResources =
+								Batch.LODResources.IsValidIndex(ChosenLODIndex)
+									? Batch.LODResources[ChosenLODIndex].Get()
+									: nullptr;
+							const FColor DebugColor = LODResources
+								? LODResources->DebugColor
+								: OptimizedSkeletalMesh::GetBatchDebugColor(ChosenLODIndex);
+							DrawWireBox(PDI, Instance.WorldBounds, DebugColor, SDPG_Foreground);
+						}
+					}
+
+					for (int32 LODIndex = 0; LODIndex < VisibleInstancesByLOD.Num(); ++LODIndex)
+					{
+						const OptimizedSkeletalMesh::FLODResources* LODResources =
+							Batch.LODResources.IsValidIndex(LODIndex)
+								? Batch.LODResources[LODIndex].Get()
+								: nullptr;
+						if (!LODResources || !LODResources->LODRenderData || !LODResources->DirectResources || !LODResources->DirectResources->bInitialized)
+						{
+							continue;
+						}
+
+						const TArray<const OptimizedSkeletalMesh::FRenderInstance*>& VisibleInstances =
+							VisibleInstancesByLOD[LODIndex].Instances;
+						if (VisibleInstances.IsEmpty())
+						{
+							continue;
+						}
+
+						FMeshBatchDynamicPrimitiveData* DynamicPrimitiveData = nullptr;
+						FBox WorldBounds(ForceInit);
+						OptimizedSkeletalMesh::BuildDynamicPrimitiveInstanceData(
+							Collector,
+							MakeArrayView(VisibleInstances),
+							DynamicPrimitiveData,
+							WorldBounds);
+						if (!DynamicPrimitiveData || !WorldBounds.IsValid)
+						{
+							continue;
+						}
+
+						FDynamicPrimitiveUniformBuffer& DynamicPrimitiveUniformBuffer =
+							Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
+						const FMatrix PrimitiveLocalToWorld = FMatrix::Identity;
+						DynamicPrimitiveUniformBuffer.Set(
+							Collector.GetRHICommandList(),
+							PrimitiveLocalToWorld,
+							PrimitiveLocalToWorld,
+							WorldBounds,
+							GetLocalBounds(),
+							true,
+							false,
+							false);
+
+						for (const FSkelMeshRenderSection& RenderSection : LODResources->LODRenderData->RenderSections)
+						{
+							if (!RenderSection.IsValid())
+							{
+								continue;
+							}
+
+							const FMaterialRenderProxy* MaterialRenderProxy = bIsWireframeView
+								? OptimizedSkeletalMesh::GetWireframeMaterialRenderProxy()
+								: OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(Batch.SkeletalMesh, RenderSection);
+							if (!MaterialRenderProxy)
+							{
+								continue;
+							}
+
+							FMeshBatch& Mesh = Collector.AllocateMesh();
+							Mesh.VertexFactory = &LODResources->DirectResources->VertexFactory;
+							Mesh.MaterialRenderProxy = MaterialRenderProxy;
+							Mesh.ReverseCulling = false;
+							Mesh.Type = PT_TriangleList;
+							Mesh.DepthPriorityGroup = SDPG_World;
+							Mesh.bCanApplyViewModeOverrides = true;
+							Mesh.CastShadow = false;
+							Mesh.bWireframe = bIsWireframeView;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+							Mesh.VisualizeLODIndex = LODIndex;
+#endif
+
+							FMeshBatchElement& BatchElement = Mesh.Elements[0];
+							BatchElement.IndexBuffer = LODResources->LODRenderData->MultiSizeIndexContainer.GetIndexBuffer();
+							BatchElement.FirstIndex = RenderSection.BaseIndex;
+							BatchElement.NumPrimitives = RenderSection.NumTriangles;
+							BatchElement.MinVertexIndex = RenderSection.BaseVertexIndex;
+							BatchElement.MaxVertexIndex = RenderSection.BaseVertexIndex + RenderSection.NumVertices - 1;
+							BatchElement.NumInstances = IntCastChecked<uint32>(VisibleInstances.Num());
+							BatchElement.DynamicPrimitiveData = DynamicPrimitiveData;
+							BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
+
+							Collector.AddMesh(ViewIndex, Mesh);
+						}
+					}
+
+					continue;
+				}
+
 				for (const OptimizedSkeletalMesh::FRenderInstance& Instance : Batch.Instances)
 				{
 					const bool bInstanceVisibleInView = OptimizedSkeletalMesh::IsInstanceVisibleInView(
