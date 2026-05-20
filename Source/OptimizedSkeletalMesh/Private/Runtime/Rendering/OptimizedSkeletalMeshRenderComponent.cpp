@@ -17,7 +17,29 @@ namespace OptimizedSkeletalMesh
 	struct FDebugInstance
 	{
 		FBox WorldBounds;
-		FColor Color;
+	};
+
+	struct FRenderBatchKey
+	{
+		TObjectPtr<USkeletalMesh> SkeletalMesh = nullptr;
+		int32 LODIndex = 0;
+
+		bool operator==(const FRenderBatchKey& Other) const
+		{
+			return SkeletalMesh == Other.SkeletalMesh && LODIndex == Other.LODIndex;
+		}
+	};
+
+	uint32 GetTypeHash(const FRenderBatchKey& Key)
+	{
+		return HashCombine(PointerHash(Key.SkeletalMesh.Get()), ::GetTypeHash(Key.LODIndex));
+	}
+
+	struct FRenderBatch
+	{
+		FRenderBatchKey Key;
+		TArray<FDebugInstance> Instances;
+		FColor DebugColor = FColor::Yellow;
 	};
 
 	static FBox GetInstanceWorldBounds(const FOptimizedSkeletalMeshInstanceDesc& Desc)
@@ -28,6 +50,23 @@ namespace OptimizedSkeletalMesh
 		}
 
 		return FBox::BuildAABB(Desc.WorldTransform.GetLocation(), FVector(FallbackInstanceExtent));
+	}
+
+	static FColor GetBatchDebugColor(const int32 BatchIndex)
+	{
+		static const FColor Colors[] =
+		{
+			FColor::Yellow,
+			FColor::Cyan,
+			FColor::Green,
+			FColor::Orange,
+			FColor::Magenta,
+			FColor::Red,
+			FColor::Blue,
+			FColor::White,
+		};
+
+		return Colors[BatchIndex % UE_ARRAY_COUNT(Colors)];
 	}
 }
 
@@ -44,17 +83,34 @@ public:
 				TArray<FOptimizedSkeletalMeshInstanceSnapshot> Snapshots;
 				Subsystem->GetInstancesSnapshot(Snapshots);
 
-				DebugInstances.Reserve(Snapshots.Num());
+				TMap<OptimizedSkeletalMesh::FRenderBatchKey, int32> BatchIndexByKey;
+				RenderBatches.Reserve(Snapshots.Num());
+
 				for (const FOptimizedSkeletalMeshInstanceSnapshot& Snapshot : Snapshots)
 				{
-					if (!Snapshot.Desc.bVisible)
+					if (!Snapshot.Desc.bVisible || !Snapshot.Desc.SkeletalMesh)
 					{
 						continue;
 					}
 
-					OptimizedSkeletalMesh::FDebugInstance& DebugInstance = DebugInstances.AddDefaulted_GetRef();
+					OptimizedSkeletalMesh::FRenderBatchKey BatchKey;
+					BatchKey.SkeletalMesh = Snapshot.Desc.SkeletalMesh;
+					BatchKey.LODIndex = FMath::Max(0, Snapshot.Desc.LODIndex);
+
+					int32* ExistingBatchIndex = BatchIndexByKey.Find(BatchKey);
+					if (!ExistingBatchIndex)
+					{
+						const int32 NewBatchIndex = RenderBatches.Num();
+						OptimizedSkeletalMesh::FRenderBatch& NewBatch = RenderBatches.AddDefaulted_GetRef();
+						NewBatch.Key = BatchKey;
+						NewBatch.DebugColor = OptimizedSkeletalMesh::GetBatchDebugColor(NewBatchIndex);
+						BatchIndexByKey.Add(BatchKey, NewBatchIndex);
+						ExistingBatchIndex = BatchIndexByKey.Find(BatchKey);
+					}
+
+					OptimizedSkeletalMesh::FRenderBatch& Batch = RenderBatches[*ExistingBatchIndex];
+					OptimizedSkeletalMesh::FDebugInstance& DebugInstance = Batch.Instances.AddDefaulted_GetRef();
 					DebugInstance.WorldBounds = OptimizedSkeletalMesh::GetInstanceWorldBounds(Snapshot.Desc);
-					DebugInstance.Color = FColor::Yellow;
 				}
 			}
 		}
@@ -80,9 +136,12 @@ public:
 			}
 
 			FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
-			for (const OptimizedSkeletalMesh::FDebugInstance& DebugInstance : DebugInstances)
+			for (const OptimizedSkeletalMesh::FRenderBatch& Batch : RenderBatches)
 			{
-				DrawWireBox(PDI, DebugInstance.WorldBounds, DebugInstance.Color, SDPG_Foreground);
+				for (const OptimizedSkeletalMesh::FDebugInstance& DebugInstance : Batch.Instances)
+				{
+					DrawWireBox(PDI, DebugInstance.WorldBounds, Batch.DebugColor, SDPG_Foreground);
+				}
 			}
 		}
 	}
@@ -99,23 +158,29 @@ public:
 
 	virtual uint32 GetMemoryFootprint() const override
 	{
-		return sizeof(*this) + GetAllocatedSize();
+		return sizeof(*this) + GetOptimizedAllocatedSize();
 	}
 
-	uint32 GetAllocatedSize() const
+	uint32 GetOptimizedAllocatedSize() const
 	{
-		return IntCastChecked<uint32>(FPrimitiveSceneProxy::GetAllocatedSize() + DebugInstances.GetAllocatedSize());
+		SIZE_T AllocatedSize = FPrimitiveSceneProxy::GetAllocatedSize() + RenderBatches.GetAllocatedSize();
+		for (const OptimizedSkeletalMesh::FRenderBatch& Batch : RenderBatches)
+		{
+			AllocatedSize += Batch.Instances.GetAllocatedSize();
+		}
+
+		return IntCastChecked<uint32>(AllocatedSize);
 	}
 
 private:
-	TArray<OptimizedSkeletalMesh::FDebugInstance> DebugInstances;
+	TArray<OptimizedSkeletalMesh::FRenderBatch> RenderBatches;
 };
 
 UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	Mobility = EComponentMobility::Movable;
-	SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BodyInstance.SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetGenerateOverlapEvents(false);
 	bCastDynamicShadow = false;
 	CastShadow = false;

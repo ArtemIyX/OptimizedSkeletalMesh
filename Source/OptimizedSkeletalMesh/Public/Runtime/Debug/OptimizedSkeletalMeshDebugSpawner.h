@@ -45,6 +45,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Debug")
 	int32 SpawnedInstanceCount = 0;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Debug")
+	int32 VisibleRenderBatchCount = 0;
+
 private:
 	UOptimizedSkeletalMeshWorldSubsystem* GetOptimizedSubsystem() const;
 	FTransform GetInstanceTransform(int32 X, int32 Y) const;

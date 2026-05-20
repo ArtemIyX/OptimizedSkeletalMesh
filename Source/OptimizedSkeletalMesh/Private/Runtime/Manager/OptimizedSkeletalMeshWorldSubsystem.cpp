@@ -174,6 +174,25 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::GetInstanceCount() const
 	return Instances.Num();
 }
 
+int32 UOptimizedSkeletalMeshWorldSubsystem::GetVisibleRenderBatchCount() const
+{
+	TSet<uint32> BatchHashes;
+
+	for (const TPair<int32, FOptimizedSkeletalMeshInstanceDesc>& Pair : Instances)
+	{
+		const FOptimizedSkeletalMeshInstanceDesc& Desc = Pair.Value;
+		if (!Desc.bVisible || !Desc.SkeletalMesh)
+		{
+			continue;
+		}
+
+		const uint32 BatchHash = HashCombine(PointerHash(Desc.SkeletalMesh.Get()), ::GetTypeHash(FMath::Max(0, Desc.LODIndex)));
+		BatchHashes.Add(BatchHash);
+	}
+
+	return BatchHashes.Num();
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::EnsureRenderBridge()
 {
 	if (RenderComponent && RenderComponent->IsRegistered())

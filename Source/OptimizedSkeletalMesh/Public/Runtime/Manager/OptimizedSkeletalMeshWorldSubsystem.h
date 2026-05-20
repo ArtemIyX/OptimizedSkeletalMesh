@@ -100,6 +100,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	int32 GetInstanceCount() const;
 
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	int32 GetVisibleRenderBatchCount() const;
+
 	bool IsRenderDataDirty() const
 	{
 		return bRenderDataDirty;
