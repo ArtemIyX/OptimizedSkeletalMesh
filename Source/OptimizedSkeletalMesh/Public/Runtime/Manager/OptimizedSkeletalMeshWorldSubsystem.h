@@ -100,6 +100,9 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshAnimationStats
 	int32 SkippedUpdateRateInstances = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 DistanceRateScaledInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
 	int32 ParallelPoseBatches = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
@@ -134,6 +137,15 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshAnimationStats
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
 	int32 MaxBonesPerInstance = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	float MinEffectiveUpdateRateHz = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	float MaxEffectiveUpdateRateHz = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	float AverageEffectiveUpdateRateHz = 0.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
 	float LastDeltaTime = 0.0f;
@@ -186,6 +198,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool SetInstanceAnimationPlaying(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInPlaying);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceAnimationUpdateRateHz(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationUpdateRateHz);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool SetInstanceVisible(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInVisible);
@@ -258,6 +273,9 @@ private:
 	void MarkBonePaletteDirty(int32 InInstanceId);
 	bool HasDirtyRenderVisibleBonePalettes() const;
 	void ClearDirtyRenderVisibleBonePalettes();
+	float GetEffectiveAnimationUpdateRateHz(const FOptimizedSkeletalMeshInstanceDesc& InDesc, float InNearestCameraDistance) const;
+	static float GetUpdateRateScaleForDistance(float InDistance);
+	bool GetNearestCameraDistance(const FVector& InWorldLocation, float& OutDistance) const;
 	static bool ShouldTickAnimation(const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 #pragma endregion
 

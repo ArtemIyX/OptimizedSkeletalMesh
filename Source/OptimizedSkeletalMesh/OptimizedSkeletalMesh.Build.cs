@@ -27,6 +27,7 @@ public class OptimizedSkeletalMesh : ModuleRules
 			{
 				"Core",
 				"CoreUObject",
+				"DeveloperSettings",
 				"Engine",
 				"RenderCore",
 				"RHI",

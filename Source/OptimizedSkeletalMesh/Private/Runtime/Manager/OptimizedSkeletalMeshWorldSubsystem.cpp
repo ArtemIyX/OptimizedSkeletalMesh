@@ -8,9 +8,11 @@
 #include "Animation/AnimationPoseData.h"
 #include "Animation/AttributesRuntime.h"
 #include "BonePose.h"
+#include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
+#include "Runtime/Settings/OptimizedSkeletalMeshSettings.h"
 #include "Stats/Stats.h"
 
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OptimizedSkeletalMesh Animation"), STATGROUP_OptimizedSkeletalMeshAnimation, STATCAT_Advanced);
@@ -19,6 +21,7 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("Animated Instances"), STAT_OptimizedSkeletalMes
 DECLARE_DWORD_COUNTER_STAT(TEXT("Active Animation Instances"), STAT_OptimizedSkeletalMeshAnimationActiveAnimationInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty Animation Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyAnimationInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Skipped Update Rate Instances"), STAT_OptimizedSkeletalMeshAnimationSkippedUpdateRateInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Distance Rate Scaled Instances"), STAT_OptimizedSkeletalMeshAnimationDistanceRateScaledInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Parallel Pose Batches"), STAT_OptimizedSkeletalMeshAnimationParallelPoseBatches, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Advanced Instances"), STAT_OptimizedSkeletalMeshAnimationAdvancedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Finished Instances"), STAT_OptimizedSkeletalMeshAnimationFinishedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
@@ -31,6 +34,9 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty GPU Palette Instances"), STAT_OptimizedSk
 DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Palette Upload Skipped Instances"), STAT_OptimizedSkeletalMeshAnimationGpuPaletteUploadSkippedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Total Bone Matrices"), STAT_OptimizedSkeletalMeshAnimationTotalBoneMatrices, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Max Bones Per Instance"), STAT_OptimizedSkeletalMeshAnimationMaxBonesPerInstance, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("Min Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationMinEffectiveUpdateRateHz, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("Max Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationMaxEffectiveUpdateRateHz, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("Average Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationAverageEffectiveUpdateRateHz, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_FLOAT_COUNTER_STAT(TEXT("Last Delta Seconds"), STAT_OptimizedSkeletalMeshAnimationLastDeltaSeconds, STATGROUP_OptimizedSkeletalMeshAnimation);
 
 namespace OptimizedSkeletalMesh
@@ -42,6 +48,7 @@ namespace OptimizedSkeletalMesh
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationActiveAnimationInstances, InStats.ActiveAnimationInstances);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationDirtyAnimationInstances, InStats.DirtyAnimationInstances);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationSkippedUpdateRateInstances, InStats.SkippedUpdateRateInstances);
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationDistanceRateScaledInstances, InStats.DistanceRateScaledInstances);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationParallelPoseBatches, InStats.ParallelPoseBatches);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationAdvancedInstances, InStats.AdvancedInstances);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationFinishedInstances, InStats.FinishedInstances);
@@ -54,6 +61,9 @@ namespace OptimizedSkeletalMesh
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationGpuPaletteUploadSkippedInstances, InStats.GpuPaletteUploadSkippedInstances);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationTotalBoneMatrices, InStats.TotalBoneMatrices);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationMaxBonesPerInstance, InStats.MaxBonesPerInstance);
+		SET_FLOAT_STAT(STAT_OptimizedSkeletalMeshAnimationMinEffectiveUpdateRateHz, InStats.MinEffectiveUpdateRateHz);
+		SET_FLOAT_STAT(STAT_OptimizedSkeletalMeshAnimationMaxEffectiveUpdateRateHz, InStats.MaxEffectiveUpdateRateHz);
+		SET_FLOAT_STAT(STAT_OptimizedSkeletalMeshAnimationAverageEffectiveUpdateRateHz, InStats.AverageEffectiveUpdateRateHz);
 		SET_FLOAT_STAT(STAT_OptimizedSkeletalMeshAnimationLastDeltaSeconds, InStats.LastDeltaTime);
 	}
 
@@ -250,6 +260,20 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationPlaying(
 		instance->bPlayAnimation = bInPlaying;
 		RefreshAnimationTracking(InHandle.Id, *instance, true);
 	}
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationUpdateRateHz(
+	FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const float InAnimationUpdateRateHz)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	instance->AnimationUpdateRateHz = FMath::Max(0.0f, InAnimationUpdateRateHz);
 	return true;
 }
 
@@ -598,6 +622,98 @@ void UOptimizedSkeletalMeshWorldSubsystem::ClearDirtyRenderVisibleBonePalettes()
 	}
 }
 
+float UOptimizedSkeletalMeshWorldSubsystem::GetEffectiveAnimationUpdateRateHz(
+	const FOptimizedSkeletalMeshInstanceDesc& InDesc,
+	const float InNearestCameraDistance) const
+{
+	const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>();
+	if (!settings || !settings->bEnableDistanceBasedAnimationUpdateRate || InNearestCameraDistance < 0.0f)
+	{
+		return InDesc.AnimationUpdateRateHz;
+	}
+
+	const float baseUpdateRateHz = InDesc.AnimationUpdateRateHz > 0.0f
+		? InDesc.AnimationUpdateRateHz
+		: settings->DefaultAnimationUpdateRateHz;
+	if (baseUpdateRateHz <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const float updateRateScale = GetUpdateRateScaleForDistance(InNearestCameraDistance);
+	const float scaledUpdateRateHz = baseUpdateRateHz * updateRateScale;
+	return FMath::Max(settings->MinAnimationUpdateRateHz, scaledUpdateRateHz);
+}
+
+float UOptimizedSkeletalMeshWorldSubsystem::GetUpdateRateScaleForDistance(const float InDistance)
+{
+	const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>();
+	if (!settings || settings->DistanceUpdateRateBands.IsEmpty())
+	{
+		return 1.0f;
+	}
+
+	float selectedScale = settings->DistanceUpdateRateBands[0].UpdateRateScale;
+	float selectedDistance = settings->DistanceUpdateRateBands[0].Distance;
+	bool bFoundBand = false;
+
+	for (const FOptimizedSkeletalMeshDistanceUpdateRateBand& band : settings->DistanceUpdateRateBands)
+	{
+		if (band.Distance >= InDistance)
+		{
+			if (!bFoundBand || band.Distance < selectedDistance)
+			{
+				selectedDistance = band.Distance;
+				selectedScale = band.UpdateRateScale;
+				bFoundBand = true;
+			}
+		}
+		else if (!bFoundBand && band.Distance >= selectedDistance)
+		{
+			selectedDistance = band.Distance;
+			selectedScale = band.UpdateRateScale;
+		}
+	}
+
+	return FMath::Max(0.0f, selectedScale);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetNearestCameraDistance(
+	const FVector& InWorldLocation,
+	float& OutDistance) const
+{
+	const UWorld* world = GetWorld();
+	if (!world)
+	{
+		return false;
+	}
+
+	float nearestDistanceSquared = TNumericLimits<float>::Max();
+	bool bFoundCamera = false;
+	for (FConstPlayerControllerIterator controllerIterator = world->GetPlayerControllerIterator(); controllerIterator; ++controllerIterator)
+	{
+		const APlayerController* playerController = controllerIterator->Get();
+		if (!playerController)
+		{
+			continue;
+		}
+
+		FVector cameraLocation = FVector::ZeroVector;
+		FRotator cameraRotation = FRotator::ZeroRotator;
+		playerController->GetPlayerViewPoint(cameraLocation, cameraRotation);
+		nearestDistanceSquared = FMath::Min(nearestDistanceSquared, FVector::DistSquared(InWorldLocation, cameraLocation));
+		bFoundCamera = true;
+	}
+
+	if (!bFoundCamera)
+	{
+		return false;
+	}
+
+	OutDistance = FMath::Sqrt(nearestDistanceSquared);
+	return true;
+}
+
 bool UOptimizedSkeletalMeshWorldSubsystem::ShouldTickAnimation(
 	const FOptimizedSkeletalMeshInstanceDesc& InDesc)
 {
@@ -697,9 +813,30 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 		if (ActiveAnimationInstanceIds.Contains(instanceId))
 		{
 			float animationDeltaTime = InDeltaTime;
-			if (desc->AnimationUpdateRateHz > 0.0f)
+			float nearestCameraDistance = -1.0f;
+			const bool bHasCameraDistance = GetNearestCameraDistance(desc->WorldTransform.GetLocation(), nearestCameraDistance);
+			const float effectiveUpdateRateHz = GetEffectiveAnimationUpdateRateHz(
+				*desc,
+				bHasCameraDistance ? nearestCameraDistance : -1.0f);
+			if (bHasCameraDistance && effectiveUpdateRateHz > 0.0f)
 			{
-				const float updateInterval = 1.0f / desc->AnimationUpdateRateHz;
+				++newStats.DistanceRateScaledInstances;
+				if (newStats.MinEffectiveUpdateRateHz <= 0.0f)
+				{
+					newStats.MinEffectiveUpdateRateHz = effectiveUpdateRateHz;
+				}
+				else
+				{
+					newStats.MinEffectiveUpdateRateHz = FMath::Min(newStats.MinEffectiveUpdateRateHz, effectiveUpdateRateHz);
+				}
+
+				newStats.MaxEffectiveUpdateRateHz = FMath::Max(newStats.MaxEffectiveUpdateRateHz, effectiveUpdateRateHz);
+				newStats.AverageEffectiveUpdateRateHz += effectiveUpdateRateHz;
+			}
+
+			if (effectiveUpdateRateHz > 0.0f)
+			{
+				const float updateInterval = 1.0f / effectiveUpdateRateHz;
 				float& accumulator = AnimationUpdateAccumulators.FindOrAdd(instanceId);
 				accumulator += InDeltaTime;
 				if (accumulator < updateInterval && !bShouldEvaluate)
@@ -710,6 +847,10 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 
 				animationDeltaTime = accumulator;
 				accumulator = 0.0f;
+			}
+			else
+			{
+				AnimationUpdateAccumulators.Remove(instanceId);
 			}
 
 			if (animationDeltaTime > 0.0f)
@@ -801,6 +942,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 					*work.MeshCache,
 					result.BonePalette);
 		}
+	}
+
+	if (newStats.DistanceRateScaledInstances > 0)
+	{
+		newStats.AverageEffectiveUpdateRateHz /= static_cast<float>(newStats.DistanceRateScaledInstances);
 	}
 
 	for (OptimizedSkeletalMesh::FAnimationEvaluationResult& result : evaluationResults)
