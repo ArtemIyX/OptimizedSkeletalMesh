@@ -89,19 +89,22 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 
 	subsystem->SetExternalRenderBridgeActive(PreviewRenderComponent != nullptr);
 
+	FOptimizedSkeletalMeshRenderSettings renderSettings;
+	renderSettings.bDrawDebugBounds = bDrawDebugBounds;
+	renderSettings.bDrawMeshSections = bDrawMeshSections;
+	renderSettings.MeshDrawMode = MeshDrawMode;
+	renderSettings.bEnableInstanceFrustumCulling = bEnableInstanceFrustumCulling;
+	renderSettings.InstanceCullBoundsScale = InstanceCullBoundsScale;
+	renderSettings.bUseConservativeProxyBounds = bUseConservativeProxyBounds;
+	renderSettings.ConservativeProxyBoundsExtent = ConservativeProxyBoundsExtent;
+	renderSettings.bDrawCullingDebug = bDrawCullingDebug;
+	renderSettings.bDrawCullTestBounds = bDrawCullTestBounds;
+	subsystem->ApplyRenderSettings(renderSettings);
+
 	if (PreviewRenderComponent)
 	{
 		PreviewRenderComponent->SetOptimizedSkeletalMeshSubsystem(subsystem);
-		PreviewRenderComponent->SetDrawDebugBounds(bDrawDebugBounds);
-		PreviewRenderComponent->SetDrawMeshSections(bDrawMeshSections);
-		PreviewRenderComponent->SetMeshDrawMode(MeshDrawMode);
-		PreviewRenderComponent->SetMaxMeshDrawInstances(MaxMeshDrawInstances);
-		PreviewRenderComponent->SetInstanceFrustumCulling(bEnableInstanceFrustumCulling);
-		PreviewRenderComponent->SetInstanceCullBoundsScale(InstanceCullBoundsScale);
-		PreviewRenderComponent->SetConservativeProxyBounds(bUseConservativeProxyBounds);
-		PreviewRenderComponent->SetConservativeProxyBoundsExtent(ConservativeProxyBoundsExtent);
-		PreviewRenderComponent->SetDrawCullingDebug(bDrawCullingDebug);
-		PreviewRenderComponent->SetDrawCullTestBounds(bDrawCullTestBounds);
+		subsystem->ApplyRenderSettingsToComponent(PreviewRenderComponent);
 	}
 
 	SpawnedHandles.Reserve(CountX * CountY);

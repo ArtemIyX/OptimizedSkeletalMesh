@@ -83,9 +83,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0", EditCondition = "!bAutoLOD"))
 	int32 ForcedLODIndex = 0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0"))
-	int32 MaxMeshDrawInstances = 1;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Culling")
 	bool bEnableInstanceFrustumCulling = true;
 

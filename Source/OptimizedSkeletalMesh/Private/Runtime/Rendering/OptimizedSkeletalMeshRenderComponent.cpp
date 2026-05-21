@@ -1560,7 +1560,7 @@ private:
 	bool bDrawDebugBounds = true;
 	bool bDrawMeshSections = false;
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
-	int32 MaxMeshDrawInstances = 1;
+	int32 MaxMeshDrawInstances = 0;
 	bool bEnableInstanceFrustumCulling = true;
 	float InstanceCullBoundsScale = 1.5f;
 	bool bDrawCullingDebug = false;

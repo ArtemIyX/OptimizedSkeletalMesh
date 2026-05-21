@@ -41,6 +41,14 @@ DECLARE_FLOAT_COUNTER_STAT(TEXT("Last Delta Seconds"), STAT_OptimizedSkeletalMes
 
 namespace OptimizedSkeletalMesh
 {
+	static FOptimizedSkeletalMeshRenderSettings NormalizeRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
+	{
+		FOptimizedSkeletalMeshRenderSettings normalizedSettings = InSettings;
+		normalizedSettings.InstanceCullBoundsScale = FMath::Max(1.0f, InSettings.InstanceCullBoundsScale);
+		normalizedSettings.ConservativeProxyBoundsExtent = FMath::Max(1000.0f, InSettings.ConservativeProxyBoundsExtent);
+		return normalizedSettings;
+	}
+
 	static void PublishAnimationStats(const FOptimizedSkeletalMeshAnimationStats& InStats)
 	{
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationRegisteredInstances, InStats.RegisteredInstances);
@@ -463,6 +471,37 @@ FOptimizedSkeletalMeshAnimationStats UOptimizedSkeletalMeshWorldSubsystem::GetLa
 	return LastAnimationStats;
 }
 
+void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
+{
+	CurrentRenderSettings = OptimizedSkeletalMesh::NormalizeRenderSettings(InSettings);
+	ApplyRenderSettingsToComponent(RenderComponent);
+	MarkRenderDataDirty();
+}
+
+FOptimizedSkeletalMeshRenderSettings UOptimizedSkeletalMeshWorldSubsystem::GetRenderSettings() const
+{
+	return CurrentRenderSettings;
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent(UOptimizedSkeletalMeshRenderComponent* InComponent) const
+{
+	if (!InComponent)
+	{
+		return;
+	}
+
+	InComponent->SetDrawDebugBounds(CurrentRenderSettings.bDrawDebugBounds);
+	InComponent->SetDrawMeshSections(CurrentRenderSettings.bDrawMeshSections);
+	InComponent->SetMeshDrawMode(CurrentRenderSettings.MeshDrawMode);
+	InComponent->SetMaxMeshDrawInstances(0);
+	InComponent->SetInstanceFrustumCulling(CurrentRenderSettings.bEnableInstanceFrustumCulling);
+	InComponent->SetInstanceCullBoundsScale(CurrentRenderSettings.InstanceCullBoundsScale);
+	InComponent->SetConservativeProxyBounds(CurrentRenderSettings.bUseConservativeProxyBounds);
+	InComponent->SetConservativeProxyBoundsExtent(CurrentRenderSettings.ConservativeProxyBoundsExtent);
+	InComponent->SetDrawCullingDebug(CurrentRenderSettings.bDrawCullingDebug);
+	InComponent->SetDrawCullTestBounds(CurrentRenderSettings.bDrawCullTestBounds);
+}
+
 const TArray<FMatrix44f>* UOptimizedSkeletalMeshWorldSubsystem::GetInstanceBonePalette(
 	const FOptimizedSkeletalMeshInstanceHandle InHandle) const
 {
@@ -578,6 +617,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::EnsureRenderBridge()
 		RenderComponent->SetOptimizedSkeletalMeshSubsystem(this);
 		RenderBridgeActor->AddInstanceComponent(RenderComponent);
 		RenderComponent->RegisterComponentWithWorld(world);
+		ApplyRenderSettingsToComponent(RenderComponent);
 	}
 }
 
@@ -598,6 +638,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::DestroyRenderBridge()
 		RenderBridgeActor->Destroy();
 		RenderBridgeActor = nullptr;
 	}
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent()
+{
+	ApplyRenderSettingsToComponent(RenderComponent);
 }
 
 int32 UOptimizedSkeletalMeshWorldSubsystem::AllocateInstanceId()

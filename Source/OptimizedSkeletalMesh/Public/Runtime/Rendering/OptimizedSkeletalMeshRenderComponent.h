@@ -169,7 +169,7 @@ private:
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
 
 	UPROPERTY(EditAnywhere, Category = "Optimized Skeletal Mesh|Debug", meta = (ClampMin = "0"))
-	int32 MaxMeshDrawInstances = 1;
+	int32 MaxMeshDrawInstances = 0;
 
 	UPROPERTY(Transient)
 	bool bEnableInstanceFrustumCulling = true;
