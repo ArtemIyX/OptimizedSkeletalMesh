@@ -19,7 +19,6 @@
 #include "MeshElementCollector.h"
 #include "PrimitiveSceneProxy.h"
 #include "PrimitiveViewRelevance.h"
-#include "ProfilingDebugging/RealtimeGPUProfiler.h"
 #include "RawIndexBuffer.h"
 #include "RenderDeferredCleanup.h"
 #include "RenderGraphBuilder.h"
@@ -35,7 +34,6 @@
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Rendering"), STATGROUP_OSMRendering, STATCAT_Advanced);
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Visible LOD"), STATGROUP_OSMVisibleLOD, STATCAT_Advanced);
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Skinning"), STATGROUP_OSMSkinning, STATCAT_Advanced);
-DECLARE_GPU_STAT_NAMED(OSMRender, TEXT("OptimizedSkeletalMesh"));
 DECLARE_DWORD_COUNTER_STAT(TEXT("Registered InInstances"), STAT_OptimizedSkeletalMeshRegisteredInstances, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Tested InInstances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OSMRendering);
@@ -945,10 +943,6 @@ public:
 		uint32 InVisibilityMap,
 		FMeshElementCollector& InCollector) const override
 	{
-		FRHICommandList& rhiCmdList = InCollector.GetRHICommandList();
-		RHI_BREADCRUMB_EVENT_STAT(rhiCmdList, OSMRender, "OptimizedSkeletalMesh");
-		SCOPED_DRAW_EVENT(rhiCmdList, OptimizedSkeletalMesh);
-
 		for (int32 viewIndex = 0; viewIndex < InViews.Num(); ++viewIndex)
 		{
 			if (!(InVisibilityMap & (1 << viewIndex)))
