@@ -106,6 +106,9 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderStats
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
 	TArray<int32> VisibleInstancesByLOD;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	TArray<int32> RenderVisibleInstanceIds;
 };
 
 UCLASS(NotBlueprintable, ClassGroup = Rendering)

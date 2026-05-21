@@ -1023,6 +1023,10 @@ public:
 						}
 
 						++frameStats.VisibleInstances;
+						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
+						{
+							frameStats.RenderVisibleInstanceIds.AddUnique(instance.InstanceId);
+						}
 						const int32 chosenLodIndex = OptimizedSkeletalMesh::ChooseLODForView(
 							*InViews[viewIndex],
 							batch.skeletalMesh,
@@ -1269,6 +1273,10 @@ public:
 					if (bDrawMeshSections && lodResources && (MaxMeshDrawInstances <= 0 || drawnMeshInstances < MaxMeshDrawInstances))
 					{
 						++frameStats.DrawnInstances;
+						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
+						{
+							frameStats.RenderVisibleInstanceIds.AddUnique(instance.InstanceId);
+						}
 						OptimizedSkeletalMesh::AddVisibleLODStat(frameStats, chosenLodIndex, 1);
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
 						{
@@ -1647,6 +1655,10 @@ bool UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
 
 	TArray<FOptimizedSkeletalMeshBonePaletteSnapshot> paletteSnapshots;
 	Subsystem->GetBonePaletteSnapshots(paletteSnapshots);
+	if (paletteSnapshots.IsEmpty())
+	{
+		return false;
+	}
 
 	TArray<OptimizedSkeletalMesh::FBonePaletteRenderSnapshot> renderSnapshots;
 	renderSnapshots.Reserve(paletteSnapshots.Num());
@@ -1679,6 +1691,10 @@ void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(
 {
 	check(IsInGameThread());
 	LastRenderStats = InStats;
+	if (Subsystem)
+	{
+		Subsystem->UpdateRenderVisibleInstanceIds(MakeArrayView(InStats.RenderVisibleInstanceIds));
+	}
 
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshRegisteredInstances, InStats.RegisteredInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshMeshBatches, InStats.MeshBatches);

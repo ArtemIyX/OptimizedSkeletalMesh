@@ -25,6 +25,10 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("Finished Instances"), STAT_OptimizedSkeletalMes
 DECLARE_DWORD_COUNTER_STAT(TEXT("Pose Evaluated Instances"), STAT_OptimizedSkeletalMeshAnimationPoseEvaluatedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Failed Pose Evaluations"), STAT_OptimizedSkeletalMeshAnimationFailedPoseEvaluations, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Bone Palette Instances"), STAT_OptimizedSkeletalMeshAnimationBonePaletteInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Render Visible Animated Instances"), STAT_OptimizedSkeletalMeshAnimationRenderVisibleAnimatedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty CPU Palette Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyCpuPaletteInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty GPU Palette Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyGpuPaletteInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Palette Upload Skipped Instances"), STAT_OptimizedSkeletalMeshAnimationGpuPaletteUploadSkippedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Total Bone Matrices"), STAT_OptimizedSkeletalMeshAnimationTotalBoneMatrices, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Max Bones Per Instance"), STAT_OptimizedSkeletalMeshAnimationMaxBonesPerInstance, STATGROUP_OptimizedSkeletalMeshAnimation);
 DECLARE_FLOAT_COUNTER_STAT(TEXT("Last Delta Seconds"), STAT_OptimizedSkeletalMeshAnimationLastDeltaSeconds, STATGROUP_OptimizedSkeletalMeshAnimation);
@@ -44,6 +48,10 @@ namespace OptimizedSkeletalMesh
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationPoseEvaluatedInstances, InStats.PoseEvaluatedInstances);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationFailedPoseEvaluations, InStats.FailedPoseEvaluations);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationBonePaletteInstances, InStats.BonePaletteInstances);
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationRenderVisibleAnimatedInstances, InStats.RenderVisibleAnimatedInstances);
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationDirtyCpuPaletteInstances, InStats.DirtyCpuPaletteInstances);
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationDirtyGpuPaletteInstances, InStats.DirtyGpuPaletteInstances);
+		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationGpuPaletteUploadSkippedInstances, InStats.GpuPaletteUploadSkippedInstances);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationTotalBoneMatrices, InStats.TotalBoneMatrices);
 		SET_DWORD_STAT(STAT_OptimizedSkeletalMeshAnimationMaxBonesPerInstance, InStats.MaxBonesPerInstance);
 		SET_FLOAT_STAT(STAT_OptimizedSkeletalMeshAnimationLastDeltaSeconds, InStats.LastDeltaTime);
@@ -75,10 +83,10 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	ActiveAnimationInstanceIds.Reset();
 	DirtyAnimationInstanceIds.Reset();
 	DirtyBonePaletteInstanceIds.Reset();
+	RenderVisibleInstanceIds.Reset();
 	AnimationUpdateAccumulators.Reset();
 	NextInstanceId = 1;
 	bRenderDataDirty = false;
-	bBonePalettesDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 	EnsureRenderBridge();
@@ -95,10 +103,10 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	ActiveAnimationInstanceIds.Reset();
 	DirtyAnimationInstanceIds.Reset();
 	DirtyBonePaletteInstanceIds.Reset();
+	RenderVisibleInstanceIds.Reset();
 	AnimationUpdateAccumulators.Reset();
 	NextInstanceId = 1;
 	bRenderDataDirty = false;
-	bBonePalettesDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 
@@ -109,9 +117,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 {
 	EnsureRenderBridge();
 	TickAnimation(InDeltaTime);
-	if (RenderComponent && bBonePalettesDirty && RenderComponent->PushBonePalettesToRenderThread())
+	if (RenderComponent && HasDirtyRenderVisibleBonePalettes() && RenderComponent->PushBonePalettesToRenderThread())
 	{
-		ClearDirtyBonePalettes();
+		ClearDirtyRenderVisibleBonePalettes();
 	}
 
 	if (bRenderDataDirty)
@@ -134,7 +142,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::IsTickable() const
 {
 	return !IsTemplate()
 		&& (bRenderDataDirty
-			|| bBonePalettesDirty
+			|| HasDirtyRenderVisibleBonePalettes()
 			|| !ActiveAnimationInstanceIds.IsEmpty()
 			|| !DirtyAnimationInstanceIds.IsEmpty());
 }
@@ -167,7 +175,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UnregisterInstance(FOptimizedSkeletal
 	Instances.Remove(InHandle.Id);
 	InstanceBonePalettes.Remove(InHandle.Id);
 	RemoveAnimationTracking(InHandle.Id);
-	bBonePalettesDirty = true;
+	MarkBonePaletteDirty(InHandle.Id);
 	FreeInstanceIds.Add(InHandle.Id);
 	MarkRenderDataDirty();
 
@@ -369,13 +377,19 @@ const TArray<FMatrix44f>* UOptimizedSkeletalMeshWorldSubsystem::GetInstanceBoneP
 void UOptimizedSkeletalMeshWorldSubsystem::GetBonePaletteSnapshots(
 	TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& OutSnapshots) const
 {
-	OutSnapshots.Reset(InstanceBonePalettes.Num());
+	OutSnapshots.Reset(RenderVisibleInstanceIds.Num());
 
-	for (const TPair<int32, TArray<FMatrix44f>>& pair : InstanceBonePalettes)
+	for (const int32 instanceId : RenderVisibleInstanceIds)
 	{
+		const TArray<FMatrix44f>* bonePalette = InstanceBonePalettes.Find(instanceId);
+		if (!bonePalette || bonePalette->IsEmpty())
+		{
+			continue;
+		}
+
 		FOptimizedSkeletalMeshBonePaletteSnapshot& snapshot = OutSnapshots.AddDefaulted_GetRef();
-		snapshot.Handle = FOptimizedSkeletalMeshInstanceHandle(pair.Key);
-		snapshot.BonePalette = pair.Value;
+		snapshot.Handle = FOptimizedSkeletalMeshInstanceHandle(instanceId);
+		snapshot.BonePalette = *bonePalette;
 	}
 
 	OutSnapshots.Sort(
@@ -387,6 +401,30 @@ void UOptimizedSkeletalMeshWorldSubsystem::GetBonePaletteSnapshots(
 int32 UOptimizedSkeletalMeshWorldSubsystem::GetCachedBonePaletteCount() const
 {
 	return InstanceBonePalettes.Num();
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::UpdateRenderVisibleInstanceIds(
+	const TConstArrayView<int32> InVisibleInstanceIds)
+{
+	TSet<int32> newVisibleInstanceIds;
+	newVisibleInstanceIds.Reserve(InVisibleInstanceIds.Num());
+	for (const int32 instanceId : InVisibleInstanceIds)
+	{
+		if (Instances.Contains(instanceId))
+		{
+			newVisibleInstanceIds.Add(instanceId);
+		}
+	}
+
+	for (const int32 instanceId : newVisibleInstanceIds)
+	{
+		if (!RenderVisibleInstanceIds.Contains(instanceId) && InstanceBonePalettes.Contains(instanceId))
+		{
+			MarkBonePaletteDirty(instanceId);
+		}
+	}
+
+	RenderVisibleInstanceIds = MoveTemp(newVisibleInstanceIds);
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::SetExternalRenderBridgeActive(const bool bInActive)
@@ -502,8 +540,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::RefreshAnimationTracking(
 		RemoveAnimationTracking(InInstanceId);
 		if (InstanceBonePalettes.Remove(InInstanceId) > 0)
 		{
-			bBonePalettesDirty = true;
-			DirtyBonePaletteInstanceIds.Add(InInstanceId);
+			MarkBonePaletteDirty(InInstanceId);
 		}
 		return;
 	}
@@ -528,7 +565,37 @@ void UOptimizedSkeletalMeshWorldSubsystem::RemoveAnimationTracking(const int32 I
 	ActiveAnimationInstanceIds.Remove(InInstanceId);
 	DirtyAnimationInstanceIds.Remove(InInstanceId);
 	DirtyBonePaletteInstanceIds.Remove(InInstanceId);
+	RenderVisibleInstanceIds.Remove(InInstanceId);
 	AnimationUpdateAccumulators.Remove(InInstanceId);
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::MarkBonePaletteDirty(const int32 InInstanceId)
+{
+	DirtyBonePaletteInstanceIds.Add(InInstanceId);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::HasDirtyRenderVisibleBonePalettes() const
+{
+	for (const int32 instanceId : DirtyBonePaletteInstanceIds)
+	{
+		if (RenderVisibleInstanceIds.Contains(instanceId))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::ClearDirtyRenderVisibleBonePalettes()
+{
+	for (auto iterator = DirtyBonePaletteInstanceIds.CreateIterator(); iterator; ++iterator)
+	{
+		if (RenderVisibleInstanceIds.Contains(*iterator))
+		{
+			iterator.RemoveCurrent();
+		}
+	}
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::ShouldTickAnimation(
@@ -547,6 +614,20 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 	newStats.LastDeltaTime = InDeltaTime;
 	newStats.ActiveAnimationInstances = ActiveAnimationInstanceIds.Num();
 	newStats.DirtyAnimationInstances = DirtyAnimationInstanceIds.Num();
+	newStats.RenderVisibleAnimatedInstances = RenderVisibleInstanceIds.Num();
+	newStats.DirtyCpuPaletteInstances = DirtyBonePaletteInstanceIds.Num();
+	newStats.DirtyGpuPaletteInstances = 0;
+	for (const int32 instanceId : DirtyBonePaletteInstanceIds)
+	{
+		if (RenderVisibleInstanceIds.Contains(instanceId))
+		{
+			++newStats.DirtyGpuPaletteInstances;
+		}
+		else
+		{
+			++newStats.GpuPaletteUploadSkippedInstances;
+		}
+	}
 
 	if (ActiveAnimationInstanceIds.IsEmpty() && DirtyAnimationInstanceIds.IsEmpty())
 	{
@@ -555,6 +636,21 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 		{
 			newStats.TotalBoneMatrices += pair.Value.Num();
 			newStats.MaxBonesPerInstance = FMath::Max(newStats.MaxBonesPerInstance, pair.Value.Num());
+		}
+
+		newStats.DirtyCpuPaletteInstances = DirtyBonePaletteInstanceIds.Num();
+		newStats.DirtyGpuPaletteInstances = 0;
+		newStats.GpuPaletteUploadSkippedInstances = 0;
+		for (const int32 instanceId : DirtyBonePaletteInstanceIds)
+		{
+			if (RenderVisibleInstanceIds.Contains(instanceId))
+			{
+				++newStats.DirtyGpuPaletteInstances;
+			}
+			else
+			{
+				++newStats.GpuPaletteUploadSkippedInstances;
+			}
 		}
 
 		LastAnimationStats = newStats;
@@ -589,8 +685,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 		{
 			if (InstanceBonePalettes.Remove(instanceId) > 0)
 			{
-				bBonePalettesDirty = true;
-				DirtyBonePaletteInstanceIds.Add(instanceId);
+				MarkBonePaletteDirty(instanceId);
 			}
 			RemoveAnimationTracking(instanceId);
 			continue;
@@ -659,8 +754,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 		{
 			if (InstanceBonePalettes.Remove(instanceId) > 0)
 			{
-				bBonePalettesDirty = true;
-				DirtyBonePaletteInstanceIds.Add(instanceId);
+				MarkBonePaletteDirty(instanceId);
 			}
 			++newStats.FailedPoseEvaluations;
 			continue;
@@ -716,15 +810,13 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 			++newStats.PoseEvaluatedInstances;
 			TArray<FMatrix44f>& bonePalette = InstanceBonePalettes.FindOrAdd(result.InstanceId);
 			bonePalette = MoveTemp(result.BonePalette);
-			bBonePalettesDirty = true;
-			DirtyBonePaletteInstanceIds.Add(result.InstanceId);
+			MarkBonePaletteDirty(result.InstanceId);
 		}
 		else
 		{
 			if (InstanceBonePalettes.Remove(result.InstanceId) > 0)
 			{
-				bBonePalettesDirty = true;
-				DirtyBonePaletteInstanceIds.Add(result.InstanceId);
+				MarkBonePaletteDirty(result.InstanceId);
 			}
 			++newStats.FailedPoseEvaluations;
 		}
@@ -737,6 +829,23 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 	{
 		newStats.TotalBoneMatrices += pair.Value.Num();
 		newStats.MaxBonesPerInstance = FMath::Max(newStats.MaxBonesPerInstance, pair.Value.Num());
+	}
+	newStats.ActiveAnimationInstances = ActiveAnimationInstanceIds.Num();
+	newStats.DirtyAnimationInstances = DirtyAnimationInstanceIds.Num();
+	newStats.RenderVisibleAnimatedInstances = RenderVisibleInstanceIds.Num();
+	newStats.DirtyCpuPaletteInstances = DirtyBonePaletteInstanceIds.Num();
+	newStats.DirtyGpuPaletteInstances = 0;
+	newStats.GpuPaletteUploadSkippedInstances = 0;
+	for (const int32 instanceId : DirtyBonePaletteInstanceIds)
+	{
+		if (RenderVisibleInstanceIds.Contains(instanceId))
+		{
+			++newStats.DirtyGpuPaletteInstances;
+		}
+		else
+		{
+			++newStats.GpuPaletteUploadSkippedInstances;
+		}
 	}
 
 	LastAnimationStats = newStats;
