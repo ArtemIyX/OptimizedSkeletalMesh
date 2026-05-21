@@ -290,6 +290,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Rendering")
 	FOptimizedSkeletalMeshRenderSettings GetRenderSettings() const;
 
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	void ReloadRenderSettingsFromCVars();
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	void RegisterExternalRenderComponent(UOptimizedSkeletalMeshRenderComponent* InComponent);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	void UnregisterExternalRenderComponent(UOptimizedSkeletalMeshRenderComponent* InComponent);
+
 	void ApplyRenderSettingsToComponent(UOptimizedSkeletalMeshRenderComponent* InComponent) const;
 
 	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle InHandle) const;
@@ -326,6 +335,7 @@ private:
 	void EnsureRenderBridge();
 	void DestroyRenderBridge();
 	void ApplyRenderSettingsToComponent();
+	void RefreshActiveRenderSettings(bool bInForce);
 #pragma endregion
 
 #pragma region Instances
@@ -376,9 +386,12 @@ private:
 	TMap<int32, float> AnimationUpdateAccumulators;
 
 	int32 NextInstanceId = 1;
+	int32 LastSeenRenderCVarVersion = 0;
 	bool bRenderDataDirty = false;
 	bool bExternalRenderBridgeActive = false;
 	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;
 	FOptimizedSkeletalMeshRenderSettings CurrentRenderSettings;
+	FOptimizedSkeletalMeshRenderSettings ActiveRenderSettings;
+	TArray<TWeakObjectPtr<UOptimizedSkeletalMeshRenderComponent>> ExternalRenderComponents;
 #pragma endregion
 };

@@ -60,11 +60,21 @@ void AOptimizedSkeletalMeshDebugSpawner::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetOptimizedSubsystem())
+	{
+		subsystem->RegisterExternalRenderComponent(PreviewRenderComponent);
+	}
+
 	RebuildInstances();
 }
 
 void AOptimizedSkeletalMeshDebugSpawner::EndPlay(const EEndPlayReason::Type InEndPlayReason)
 {
+	if (UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetOptimizedSubsystem())
+	{
+		subsystem->UnregisterExternalRenderComponent(PreviewRenderComponent);
+	}
+
 	ClearInstances();
 
 	Super::EndPlay(InEndPlayReason);
@@ -104,6 +114,7 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 	if (PreviewRenderComponent)
 	{
 		PreviewRenderComponent->SetOptimizedSkeletalMeshSubsystem(subsystem);
+		subsystem->RegisterExternalRenderComponent(PreviewRenderComponent);
 		subsystem->ApplyRenderSettingsToComponent(PreviewRenderComponent);
 	}
 

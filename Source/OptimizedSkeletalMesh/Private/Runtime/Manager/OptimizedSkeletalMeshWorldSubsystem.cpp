@@ -8,6 +8,8 @@
 #include "Animation/AnimationPoseData.h"
 #include "Animation/AttributesRuntime.h"
 #include "BonePose.h"
+#include "HAL/IConsoleManager.h"
+#include "HAL/ThreadSafeCounter.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -41,12 +43,131 @@ DECLARE_FLOAT_COUNTER_STAT(TEXT("Last Delta Seconds"), STAT_OptimizedSkeletalMes
 
 namespace OptimizedSkeletalMesh
 {
+	static FThreadSafeCounter RenderCVarChangeVersion;
+
+	static void OnRenderOverrideCVarsChanged()
+	{
+		RenderCVarChangeVersion.Increment();
+	}
+
+	static FAutoConsoleVariableSink RenderCVarSink(
+		FConsoleCommandDelegate::CreateStatic(&OnRenderOverrideCVarsChanged));
+
+	static int32 GetRenderCVarChangeVersion()
+	{
+		return RenderCVarChangeVersion.GetValue();
+	}
+
+	static TAutoConsoleVariable<int32> CVarRenderOverrideEnabled(
+		TEXT("osm.Render.OverrideEnabled"),
+		0,
+		TEXT("Enable global render settings override for OptimizedSkeletalMesh.\n")
+		TEXT("0: use subsystem profile settings\n")
+		TEXT("1: override from osm.Render.* cvars"),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderDrawDebugBounds(
+		TEXT("osm.Render.DrawDebugBounds"),
+		1,
+		TEXT("Override bDrawDebugBounds when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderDrawMeshSections(
+		TEXT("osm.Render.DrawMeshSections"),
+		1,
+		TEXT("Override bDrawMeshSections when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderDrawMode(
+		TEXT("osm.Render.DrawMode"),
+		static_cast<int32>(EOptimizedSkeletalMeshDrawMode::DynamicMeshProof),
+		TEXT("Override MeshDrawMode when osm.Render.OverrideEnabled=1.\n")
+		TEXT("0: DynamicMeshProof, 1: DirectMeshPerInstance, 2: DirectMeshInstanced, 3: GpuSkinnedInstanced"),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderInstanceFrustumCulling(
+		TEXT("osm.Render.InstanceFrustumCulling"),
+		1,
+		TEXT("Override bEnableInstanceFrustumCulling when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<float> CVarRenderInstanceCullBoundsScale(
+		TEXT("osm.Render.InstanceCullBoundsScale"),
+		1.5f,
+		TEXT("Override InstanceCullBoundsScale when osm.Render.OverrideEnabled=1."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderUseConservativeProxyBounds(
+		TEXT("osm.Render.UseConservativeProxyBounds"),
+		1,
+		TEXT("Override bUseConservativeProxyBounds when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<float> CVarRenderConservativeProxyBoundsExtent(
+		TEXT("osm.Render.ConservativeProxyBoundsExtent"),
+		10000000.0f,
+		TEXT("Override ConservativeProxyBoundsExtent when osm.Render.OverrideEnabled=1."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderDrawCullingDebug(
+		TEXT("osm.Render.DrawCullingDebug"),
+		0,
+		TEXT("Override bDrawCullingDebug when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderDrawCullTestBounds(
+		TEXT("osm.Render.DrawCullTestBounds"),
+		1,
+		TEXT("Override bDrawCullTestBounds when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		ECVF_Default);
+
 	static FOptimizedSkeletalMeshRenderSettings NormalizeRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
 	{
 		FOptimizedSkeletalMeshRenderSettings normalizedSettings = InSettings;
 		normalizedSettings.InstanceCullBoundsScale = FMath::Max(1.0f, InSettings.InstanceCullBoundsScale);
 		normalizedSettings.ConservativeProxyBoundsExtent = FMath::Max(1000.0f, InSettings.ConservativeProxyBoundsExtent);
+		normalizedSettings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
+			FMath::Clamp(static_cast<int32>(InSettings.MeshDrawMode), 0, 3));
 		return normalizedSettings;
+	}
+
+	static FOptimizedSkeletalMeshRenderSettings ResolveRenderSettingsWithCVars(
+		const FOptimizedSkeletalMeshRenderSettings& InProfileSettings)
+	{
+		FOptimizedSkeletalMeshRenderSettings resolvedSettings = InProfileSettings;
+
+		if (CVarRenderOverrideEnabled.GetValueOnGameThread() == 0)
+		{
+			return NormalizeRenderSettings(resolvedSettings);
+		}
+
+		resolvedSettings.bDrawDebugBounds = CVarRenderDrawDebugBounds.GetValueOnGameThread() != 0;
+		resolvedSettings.bDrawMeshSections = CVarRenderDrawMeshSections.GetValueOnGameThread() != 0;
+		resolvedSettings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
+			FMath::Clamp(CVarRenderDrawMode.GetValueOnGameThread(), 0, 3));
+		resolvedSettings.bEnableInstanceFrustumCulling = CVarRenderInstanceFrustumCulling.GetValueOnGameThread() != 0;
+		resolvedSettings.InstanceCullBoundsScale = CVarRenderInstanceCullBoundsScale.GetValueOnGameThread();
+		resolvedSettings.bUseConservativeProxyBounds = CVarRenderUseConservativeProxyBounds.GetValueOnGameThread() != 0;
+		resolvedSettings.ConservativeProxyBoundsExtent = CVarRenderConservativeProxyBoundsExtent.GetValueOnGameThread();
+		resolvedSettings.bDrawCullingDebug = CVarRenderDrawCullingDebug.GetValueOnGameThread() != 0;
+		resolvedSettings.bDrawCullTestBounds = CVarRenderDrawCullTestBounds.GetValueOnGameThread() != 0;
+
+		return NormalizeRenderSettings(resolvedSettings);
+	}
+
+	static bool AreRenderSettingsEqual(
+		const FOptimizedSkeletalMeshRenderSettings& InLeft,
+		const FOptimizedSkeletalMeshRenderSettings& InRight)
+	{
+		return InLeft.bDrawDebugBounds == InRight.bDrawDebugBounds
+			&& InLeft.bDrawMeshSections == InRight.bDrawMeshSections
+			&& InLeft.MeshDrawMode == InRight.MeshDrawMode
+			&& InLeft.bEnableInstanceFrustumCulling == InRight.bEnableInstanceFrustumCulling
+			&& FMath::IsNearlyEqual(InLeft.InstanceCullBoundsScale, InRight.InstanceCullBoundsScale)
+			&& InLeft.bUseConservativeProxyBounds == InRight.bUseConservativeProxyBounds
+			&& FMath::IsNearlyEqual(InLeft.ConservativeProxyBoundsExtent, InRight.ConservativeProxyBoundsExtent)
+			&& InLeft.bDrawCullingDebug == InRight.bDrawCullingDebug
+			&& InLeft.bDrawCullTestBounds == InRight.bDrawCullTestBounds;
 	}
 
 	static void PublishAnimationStats(const FOptimizedSkeletalMeshAnimationStats& InStats)
@@ -103,10 +224,15 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	DirtyBonePaletteInstanceIds.Reset();
 	RenderVisibleInstanceIds.Reset();
 	AnimationUpdateAccumulators.Reset();
+	ExternalRenderComponents.Reset();
 	NextInstanceId = 1;
+	LastSeenRenderCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
 	bRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
+	CurrentRenderSettings = FOptimizedSkeletalMeshRenderSettings();
+	ActiveRenderSettings = CurrentRenderSettings;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
+	RefreshActiveRenderSettings(true);
 	EnsureRenderBridge();
 }
 
@@ -123,9 +249,13 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	DirtyBonePaletteInstanceIds.Reset();
 	RenderVisibleInstanceIds.Reset();
 	AnimationUpdateAccumulators.Reset();
+	ExternalRenderComponents.Reset();
 	NextInstanceId = 1;
+	LastSeenRenderCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
 	bRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
+	CurrentRenderSettings = FOptimizedSkeletalMeshRenderSettings();
+	ActiveRenderSettings = CurrentRenderSettings;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 
 	Super::Deinitialize();
@@ -133,6 +263,17 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 
 void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 {
+	const int32 currentCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
+	if (LastSeenRenderCVarVersion != currentCVarVersion)
+	{
+		LastSeenRenderCVarVersion = currentCVarVersion;
+		RefreshActiveRenderSettings(true);
+	}
+	else
+	{
+		RefreshActiveRenderSettings(false);
+	}
+
 	EnsureRenderBridge();
 	TickAnimation(InDeltaTime);
 	if (RenderComponent && HasDirtyRenderVisibleBonePalettes() && RenderComponent->PushBonePalettesToRenderThread())
@@ -158,8 +299,11 @@ TStatId UOptimizedSkeletalMeshWorldSubsystem::GetStatId() const
 
 bool UOptimizedSkeletalMeshWorldSubsystem::IsTickable() const
 {
+	const bool bHasPendingRenderCVarUpdate =
+		LastSeenRenderCVarVersion != OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
 	return !IsTemplate()
-		&& (bRenderDataDirty
+		&& (bHasPendingRenderCVarUpdate
+			|| bRenderDataDirty
 			|| HasDirtyRenderVisibleBonePalettes()
 			|| !ActiveAnimationInstanceIds.IsEmpty()
 			|| !DirtyAnimationInstanceIds.IsEmpty());
@@ -474,13 +618,51 @@ FOptimizedSkeletalMeshAnimationStats UOptimizedSkeletalMeshWorldSubsystem::GetLa
 void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
 {
 	CurrentRenderSettings = OptimizedSkeletalMesh::NormalizeRenderSettings(InSettings);
-	ApplyRenderSettingsToComponent(RenderComponent);
-	MarkRenderDataDirty();
+	RefreshActiveRenderSettings(true);
 }
 
 FOptimizedSkeletalMeshRenderSettings UOptimizedSkeletalMeshWorldSubsystem::GetRenderSettings() const
 {
 	return CurrentRenderSettings;
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::ReloadRenderSettingsFromCVars()
+{
+	RefreshActiveRenderSettings(true);
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::RegisterExternalRenderComponent(
+	UOptimizedSkeletalMeshRenderComponent* InComponent)
+{
+	if (!InComponent)
+	{
+		return;
+	}
+
+	for (int32 componentIndex = ExternalRenderComponents.Num() - 1; componentIndex >= 0; --componentIndex)
+	{
+		const UOptimizedSkeletalMeshRenderComponent* component = ExternalRenderComponents[componentIndex].Get();
+		if (!component || component == InComponent)
+		{
+			ExternalRenderComponents.RemoveAtSwap(componentIndex, 1, EAllowShrinking::No);
+		}
+	}
+
+	ExternalRenderComponents.Add(InComponent);
+	ApplyRenderSettingsToComponent(InComponent);
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::UnregisterExternalRenderComponent(
+	UOptimizedSkeletalMeshRenderComponent* InComponent)
+{
+	for (int32 componentIndex = ExternalRenderComponents.Num() - 1; componentIndex >= 0; --componentIndex)
+	{
+		const UOptimizedSkeletalMeshRenderComponent* component = ExternalRenderComponents[componentIndex].Get();
+		if (!component || component == InComponent)
+		{
+			ExternalRenderComponents.RemoveAtSwap(componentIndex, 1, EAllowShrinking::No);
+		}
+	}
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent(UOptimizedSkeletalMeshRenderComponent* InComponent) const
@@ -490,16 +672,16 @@ void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent(UOptim
 		return;
 	}
 
-	InComponent->SetDrawDebugBounds(CurrentRenderSettings.bDrawDebugBounds);
-	InComponent->SetDrawMeshSections(CurrentRenderSettings.bDrawMeshSections);
-	InComponent->SetMeshDrawMode(CurrentRenderSettings.MeshDrawMode);
+	InComponent->SetDrawDebugBounds(ActiveRenderSettings.bDrawDebugBounds);
+	InComponent->SetDrawMeshSections(ActiveRenderSettings.bDrawMeshSections);
+	InComponent->SetMeshDrawMode(ActiveRenderSettings.MeshDrawMode);
 	InComponent->SetMaxMeshDrawInstances(0);
-	InComponent->SetInstanceFrustumCulling(CurrentRenderSettings.bEnableInstanceFrustumCulling);
-	InComponent->SetInstanceCullBoundsScale(CurrentRenderSettings.InstanceCullBoundsScale);
-	InComponent->SetConservativeProxyBounds(CurrentRenderSettings.bUseConservativeProxyBounds);
-	InComponent->SetConservativeProxyBoundsExtent(CurrentRenderSettings.ConservativeProxyBoundsExtent);
-	InComponent->SetDrawCullingDebug(CurrentRenderSettings.bDrawCullingDebug);
-	InComponent->SetDrawCullTestBounds(CurrentRenderSettings.bDrawCullTestBounds);
+	InComponent->SetInstanceFrustumCulling(ActiveRenderSettings.bEnableInstanceFrustumCulling);
+	InComponent->SetInstanceCullBoundsScale(ActiveRenderSettings.InstanceCullBoundsScale);
+	InComponent->SetConservativeProxyBounds(ActiveRenderSettings.bUseConservativeProxyBounds);
+	InComponent->SetConservativeProxyBoundsExtent(ActiveRenderSettings.ConservativeProxyBoundsExtent);
+	InComponent->SetDrawCullingDebug(ActiveRenderSettings.bDrawCullingDebug);
+	InComponent->SetDrawCullTestBounds(ActiveRenderSettings.bDrawCullTestBounds);
 }
 
 const TArray<FMatrix44f>* UOptimizedSkeletalMeshWorldSubsystem::GetInstanceBonePalette(
@@ -643,6 +825,33 @@ void UOptimizedSkeletalMeshWorldSubsystem::DestroyRenderBridge()
 void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent()
 {
 	ApplyRenderSettingsToComponent(RenderComponent);
+
+	for (int32 componentIndex = ExternalRenderComponents.Num() - 1; componentIndex >= 0; --componentIndex)
+	{
+		UOptimizedSkeletalMeshRenderComponent* component = ExternalRenderComponents[componentIndex].Get();
+		if (!component)
+		{
+			ExternalRenderComponents.RemoveAtSwap(componentIndex, 1, EAllowShrinking::No);
+			continue;
+		}
+
+		ApplyRenderSettingsToComponent(component);
+	}
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::RefreshActiveRenderSettings(const bool bInForce)
+{
+	const FOptimizedSkeletalMeshRenderSettings resolvedSettings =
+		OptimizedSkeletalMesh::ResolveRenderSettingsWithCVars(CurrentRenderSettings);
+
+	if (!bInForce && OptimizedSkeletalMesh::AreRenderSettingsEqual(ActiveRenderSettings, resolvedSettings))
+	{
+		return;
+	}
+
+	ActiveRenderSettings = resolvedSettings;
+	ApplyRenderSettingsToComponent();
+	MarkRenderDataDirty();
 }
 
 int32 UOptimizedSkeletalMeshWorldSubsystem::AllocateInstanceId()
