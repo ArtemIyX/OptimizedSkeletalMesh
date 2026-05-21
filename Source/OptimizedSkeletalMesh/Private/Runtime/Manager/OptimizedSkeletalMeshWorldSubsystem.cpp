@@ -121,6 +121,13 @@ namespace OptimizedSkeletalMesh
 		TEXT("Override bDrawCullTestBounds when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
 		ECVF_Default);
 
+	static TAutoConsoleVariable<int32> CVarAnimationMaxDirtyEvaluationsPerFrame(
+		TEXT("osm.Animation.MaxDirtyEvaluationsPerFrame"),
+		512,
+		TEXT("Maximum number of dirty animation instances to evaluate per frame.\n")
+		TEXT("<= 0 means no limit."),
+		ECVF_Default);
+
 	static FOptimizedSkeletalMeshRenderSettings NormalizeRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
 	{
 		FOptimizedSkeletalMeshRenderSettings normalizedSettings = InSettings;
@@ -363,6 +370,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::AddInstancesBatch(
 		return;
 	}
 
+	++BulkUpdateDepth;
 	for (const FTransform& worldTransform : InWorldTransforms)
 	{
 		FOptimizedSkeletalMeshInstanceDesc desc = InBaseDesc;
@@ -374,6 +382,8 @@ void UOptimizedSkeletalMeshWorldSubsystem::AddInstancesBatch(
 			OutHandles.Add(handle);
 		}
 	}
+	BulkUpdateDepth = FMath::Max(0, BulkUpdateDepth - 1);
+	MarkRenderDataDirty();
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::RemoveInstance(const FOptimizedSkeletalMeshInstanceHandle InHandle)
@@ -390,12 +400,18 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::RemoveInstances(
 	const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles)
 {
 	int32 removedCount = 0;
+	++BulkUpdateDepth;
 	for (const FOptimizedSkeletalMeshInstanceHandle& handle : InHandles)
 	{
 		if (UnregisterInstance(handle))
 		{
 			++removedCount;
 		}
+	}
+	BulkUpdateDepth = FMath::Max(0, BulkUpdateDepth - 1);
+	if (removedCount > 0)
+	{
+		MarkRenderDataDirty();
 	}
 
 	return removedCount;
@@ -404,12 +420,18 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::RemoveInstances(
 int32 UOptimizedSkeletalMeshWorldSubsystem::RemoveInstancesById(const TArray<int32>& InInstanceIds)
 {
 	int32 removedCount = 0;
+	++BulkUpdateDepth;
 	for (const int32 instanceId : InInstanceIds)
 	{
 		if (UnregisterInstance(FOptimizedSkeletalMeshInstanceHandle(instanceId)))
 		{
 			++removedCount;
 		}
+	}
+	BulkUpdateDepth = FMath::Max(0, BulkUpdateDepth - 1);
+	if (removedCount > 0)
+	{
+		MarkRenderDataDirty();
 	}
 
 	return removedCount;
@@ -873,7 +895,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::MarkRenderDataDirty()
 {
 	bRenderDataDirty = true;
 
-	if (RenderComponent)
+	if (RenderComponent && BulkUpdateDepth <= 0)
 	{
 		RenderComponent->RequestRenderRefresh();
 	}
@@ -1119,10 +1141,28 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 
 	TArray<int32> instanceIdsToProcess;
 	instanceIdsToProcess.Reserve(ActiveAnimationInstanceIds.Num() + DirtyAnimationInstanceIds.Num());
+
+	TArray<int32> dirtyInstanceIdsToProcess;
+	const int32 maxDirtyEvaluationsPerFrame = OptimizedSkeletalMesh::CVarAnimationMaxDirtyEvaluationsPerFrame.GetValueOnGameThread();
+	const int32 maxDirtyCount = maxDirtyEvaluationsPerFrame > 0
+		? maxDirtyEvaluationsPerFrame
+		: TNumericLimits<int32>::Max();
+
+	dirtyInstanceIdsToProcess.Reserve(FMath::Min(DirtyAnimationInstanceIds.Num(), maxDirtyCount));
 	for (const int32 instanceId : DirtyAnimationInstanceIds)
+	{
+		dirtyInstanceIdsToProcess.Add(instanceId);
+		if (dirtyInstanceIdsToProcess.Num() >= maxDirtyCount)
+		{
+			break;
+		}
+	}
+
+	for (const int32 instanceId : dirtyInstanceIdsToProcess)
 	{
 		instanceIdsToProcess.AddUnique(instanceId);
 	}
+
 	for (const int32 instanceId : ActiveAnimationInstanceIds)
 	{
 		instanceIdsToProcess.AddUnique(instanceId);
@@ -1315,7 +1355,10 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 		}
 	}
 
-	DirtyAnimationInstanceIds.Reset();
+	for (const int32 instanceId : dirtyInstanceIdsToProcess)
+	{
+		DirtyAnimationInstanceIds.Remove(instanceId);
+	}
 
 	newStats.BonePaletteInstances = InstanceBonePalettes.Num();
 	for (const TPair<int32, TArray<FMatrix44f>>& pair : InstanceBonePalettes)

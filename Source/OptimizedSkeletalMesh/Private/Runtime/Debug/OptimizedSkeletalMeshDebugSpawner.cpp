@@ -118,32 +118,30 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 		subsystem->ApplyRenderSettingsToComponent(PreviewRenderComponent);
 	}
 
-	SpawnedHandles.Reserve(CountX * CountY);
+	TArray<FTransform> worldTransforms;
+	worldTransforms.Reserve(CountX * CountY);
 
 	for (int32 y = 0; y < CountY; ++y)
 	{
 		for (int32 x = 0; x < CountX; ++x)
 		{
-			FOptimizedSkeletalMeshInstanceDesc desc;
-			desc.SkeletalMesh = SkeletalMesh;
-			desc.WorldTransform = GetInstanceTransform(x, y);
-			desc.LODIndex = ForcedLODIndex;
-			desc.bAutoLOD = bAutoLOD;
-			desc.Animation = Animation;
-			desc.AnimationTime = AnimationStartTime;
-			desc.AnimationPlayRate = AnimationPlayRate;
-			desc.bLoopAnimation = bLoopAnimation;
-			desc.bPlayAnimation = bPlayAnimation;
-			desc.AnimationUpdateRateHz = AnimationUpdateRateHz;
-			desc.bVisible = true;
-
-			const FOptimizedSkeletalMeshInstanceHandle handle = subsystem->RegisterInstance(desc);
-			if (handle.IsValid())
-			{
-				SpawnedHandles.Add(handle);
-			}
+			worldTransforms.Add(GetInstanceTransform(x, y));
 		}
 	}
+
+	FOptimizedSkeletalMeshInstanceDesc baseDesc;
+	baseDesc.SkeletalMesh = SkeletalMesh;
+	baseDesc.LODIndex = ForcedLODIndex;
+	baseDesc.bAutoLOD = bAutoLOD;
+	baseDesc.Animation = Animation;
+	baseDesc.AnimationTime = AnimationStartTime;
+	baseDesc.AnimationPlayRate = AnimationPlayRate;
+	baseDesc.bLoopAnimation = bLoopAnimation;
+	baseDesc.bPlayAnimation = bPlayAnimation;
+	baseDesc.AnimationUpdateRateHz = AnimationUpdateRateHz;
+	baseDesc.bVisible = true;
+
+	subsystem->AddInstancesBatch(baseDesc, worldTransforms, SpawnedHandles);
 
 	SpawnedInstanceCount = SpawnedHandles.Num();
 	VisibleRenderBatchCount = subsystem->GetVisibleRenderBatchCount();
@@ -160,11 +158,7 @@ void AOptimizedSkeletalMeshDebugSpawner::ClearInstances()
 	{
 		const bool bUsePreviewRenderBridge = PreviewRenderComponent != nullptr;
 		subsystem->SetExternalRenderBridgeActive(bUsePreviewRenderBridge);
-
-		for (const FOptimizedSkeletalMeshInstanceHandle& handle : SpawnedHandles)
-		{
-			subsystem->UnregisterInstance(handle);
-		}
+		subsystem->RemoveInstances(SpawnedHandles);
 	}
 
 	SpawnedHandles.Reset();

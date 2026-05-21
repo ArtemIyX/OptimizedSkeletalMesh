@@ -36,10 +36,10 @@ DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Visible LOD"), STATGROUP_OSMVisibleLOD,
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Skinning"), STATGROUP_OSMSkinning, STATCAT_Advanced);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Registered InInstances"), STAT_OptimizedSkeletalMeshRegisteredInstances, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Tested InInstances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible InInstances"), STAT_OptimizedSkeletalMeshVisibleInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Culled InInstances"), STAT_OptimizedSkeletalMeshCulledInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Drawn InInstances"), STAT_OptimizedSkeletalMeshDrawnInstances, STATGROUP_OSMRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Tested Instances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OSMRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible Instances"), STAT_OptimizedSkeletalMeshVisibleInstances, STATGROUP_OSMRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Culled Instances"), STAT_OptimizedSkeletalMeshCulledInstances, STATGROUP_OSMRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Drawn Instances"), STAT_OptimizedSkeletalMeshDrawnInstances, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Draw Calls"), STAT_OptimizedSkeletalMeshSubmittedDrawCalls, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Sections"), STAT_OptimizedSkeletalMeshSubmittedSections, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Triangles"), STAT_OptimizedSkeletalMeshSubmittedTriangles, STATGROUP_OSMRendering);
@@ -51,7 +51,7 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("LOD4"), STAT_OptimizedSkeletalMeshVisibleLOD4, 
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD5"), STAT_OptimizedSkeletalMeshVisibleLOD5, STATGROUP_OSMVisibleLOD);
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD6"), STAT_OptimizedSkeletalMeshVisibleLOD6, STATGROUP_OSMVisibleLOD);
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD7"), STAT_OptimizedSkeletalMeshVisibleLOD7, STATGROUP_OSMVisibleLOD);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Palette InInstances"), STAT_OptimizedSkeletalMeshSkinningPaletteInstances, STATGROUP_OSMSkinning);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Palette Instances"), STAT_OptimizedSkeletalMeshSkinningPaletteInstances, STATGROUP_OSMSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Palette Matrices"), STAT_OptimizedSkeletalMeshSkinningPaletteMatrices, STATGROUP_OSMSkinning);
 DECLARE_MEMORY_STAT(TEXT("Palette Memory"), STAT_OptimizedSkeletalMeshSkinningPaletteBytes, STATGROUP_OSMSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Palette Matrices"), STAT_OptimizedSkeletalMeshSkinningGPUPaletteMatrices, STATGROUP_OSMSkinning);
@@ -59,7 +59,7 @@ DECLARE_MEMORY_STAT(TEXT("GPU Palette Memory"), STAT_OptimizedSkeletalMeshSkinni
 DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Palette Uploads"), STAT_OptimizedSkeletalMeshSkinningGPUPaletteUploads, STATGROUP_OSMSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Skin Weight LODs"), STAT_OptimizedSkeletalMeshSkinningSkinWeightLODs, STATGROUP_OSMSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Skin Weight Vertices"), STAT_OptimizedSkeletalMeshSkinningSkinWeightVertices, STATGROUP_OSMSkinning);
-DECLARE_DWORD_COUNTER_STAT(TEXT("max Bone Influences"), STAT_OptimizedSkeletalMeshSkinningMaxBoneInfluences, STATGROUP_OSMSkinning);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Max Bone Influences"), STAT_OptimizedSkeletalMeshSkinningMaxBoneInfluences, STATGROUP_OSMSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("16-bit Bone Index LODs"), STAT_OptimizedSkeletalMeshSkinning16BitIndexLODs, STATGROUP_OSMSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("16-bit Bone Weight LODs"), STAT_OptimizedSkeletalMeshSkinning16BitWeightLODs, STATGROUP_OSMSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Missing Skin Weight LODs"), STAT_OptimizedSkeletalMeshSkinningMissingSkinWeightLODs, STATGROUP_OSMSkinning);

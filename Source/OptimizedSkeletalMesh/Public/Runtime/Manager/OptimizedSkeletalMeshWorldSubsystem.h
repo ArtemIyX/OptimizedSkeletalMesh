@@ -386,6 +386,7 @@ private:
 	TMap<int32, float> AnimationUpdateAccumulators;
 
 	int32 NextInstanceId = 1;
+	int32 BulkUpdateDepth = 0;
 	int32 LastSeenRenderCVarVersion = 0;
 	bool bRenderDataDirty = false;
 	bool bExternalRenderBridgeActive = false;
