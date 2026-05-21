@@ -11,6 +11,7 @@
 class USkeletalMesh;
 class UAnimSequence;
 class AActor;
+class AOptimizedSkeletalMeshRenderBridgeActor;
 class UOptimizedSkeletalMeshRenderComponent;
 
 struct FOptimizedSkeletalMeshAnimationMeshCache
@@ -176,13 +177,13 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderSettings
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
-	bool bDrawDebugBounds = true;
+	bool bDrawDebugBounds = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
-	bool bDrawMeshSections = false;
+	bool bDrawMeshSections = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
-	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
+	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
 	bool bEnableInstanceFrustumCulling = true;
@@ -200,7 +201,7 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderSettings
 	bool bDrawCullingDebug = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
-	bool bDrawCullTestBounds = true;
+	bool bDrawCullTestBounds = false;
 };
 
 UCLASS()
@@ -284,6 +285,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	FOptimizedSkeletalMeshAnimationStats GetLastAnimationStats() const;
 
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Rendering")
+	FOptimizedSkeletalMeshRenderStats GetLastRenderStats() const;
+
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
 	void ApplyRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings);
 
@@ -304,6 +308,7 @@ public:
 	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle InHandle) const;
 	void GetBonePaletteSnapshots(TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& OutSnapshots) const;
 	void UpdateRenderVisibleInstanceIds(TConstArrayView<int32> InVisibleInstanceIds);
+	void UpdateLastRenderStats(const FOptimizedSkeletalMeshRenderStats& InStats);
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Animation")
 	int32 GetCachedBonePaletteCount() const;
@@ -388,9 +393,11 @@ private:
 	int32 NextInstanceId = 1;
 	int32 BulkUpdateDepth = 0;
 	int32 LastSeenRenderCVarVersion = 0;
+	int32 RenderStateRecoveryAttempts = 0;
 	bool bRenderDataDirty = false;
 	bool bExternalRenderBridgeActive = false;
 	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;
+	FOptimizedSkeletalMeshRenderStats LastRenderStats;
 	FOptimizedSkeletalMeshRenderSettings CurrentRenderSettings;
 	FOptimizedSkeletalMeshRenderSettings ActiveRenderSettings;
 	TArray<TWeakObjectPtr<UOptimizedSkeletalMeshRenderComponent>> ExternalRenderComponents;

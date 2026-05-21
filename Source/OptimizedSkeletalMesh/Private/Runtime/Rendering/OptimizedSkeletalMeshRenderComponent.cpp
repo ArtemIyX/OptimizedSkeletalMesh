@@ -30,6 +30,7 @@
 #include "Runtime/Manager/OptimizedSkeletalMeshWorldSubsystem.h"
 #include "SceneManagement.h"
 #include "Stats/Stats.h"
+#include "Logging/LogMacros.h"
 
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Rendering"), STATGROUP_OSMRendering, STATCAT_Advanced);
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Visible LOD"), STATGROUP_OSMVisibleLOD, STATCAT_Advanced);
@@ -1691,9 +1692,23 @@ void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(
 {
 	check(IsInGameThread());
 	LastRenderStats = InStats;
+	static bool bLoggedFirstRenderStats = false;
+	if (!bLoggedFirstRenderStats)
+	{
+		bLoggedFirstRenderStats = true;
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("OSM ApplyRenderStats: tested=%d visible=%d drawn=%d batches=%d"),
+			InStats.TestedInstances,
+			InStats.VisibleInstances,
+			InStats.DrawnInstances,
+			InStats.MeshBatches);
+	}
 	if (Subsystem)
 	{
 		Subsystem->UpdateRenderVisibleInstanceIds(MakeArrayView(InStats.RenderVisibleInstanceIds));
+		Subsystem->UpdateLastRenderStats(InStats);
 	}
 
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshRegisteredInstances, InStats.RegisteredInstances);
@@ -1740,6 +1755,20 @@ void UOptimizedSkeletalMeshRenderComponent::RequestRenderRefresh()
 
 FPrimitiveSceneProxy* UOptimizedSkeletalMeshRenderComponent::CreateSceneProxy()
 {
+	static bool bLoggedCreateProxy = false;
+	if (!bLoggedCreateProxy)
+	{
+		bLoggedCreateProxy = true;
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("OSM CreateSceneProxy: subsystem=%s registered=%d visible=%d hiddenInGame=%d"),
+			Subsystem ? TEXT("yes") : TEXT("no"),
+			IsRegistered() ? 1 : 0,
+			IsVisible() ? 1 : 0,
+			bHiddenInGame ? 1 : 0);
+	}
+
 	return new FOptimizedSkeletalMeshSceneProxy(this);
 }
 

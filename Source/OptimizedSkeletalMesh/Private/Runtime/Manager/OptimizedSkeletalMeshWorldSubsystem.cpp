@@ -13,9 +13,11 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Runtime/Rendering/OptimizedSkeletalMeshRenderBridgeActor.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 #include "Runtime/Settings/OptimizedSkeletalMeshSettings.h"
 #include "Stats/Stats.h"
+#include "Logging/LogMacros.h"
 
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Animation"), STATGROUP_OSMAnimation, STATCAT_Advanced);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Registered Instances"), STAT_OptimizedSkeletalMeshAnimationRegisteredInstances, STATGROUP_OSMAnimation);
@@ -234,8 +236,10 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	ExternalRenderComponents.Reset();
 	NextInstanceId = 1;
 	LastSeenRenderCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
+	RenderStateRecoveryAttempts = 0;
 	bRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
+	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
 	CurrentRenderSettings = FOptimizedSkeletalMeshRenderSettings();
 	ActiveRenderSettings = CurrentRenderSettings;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
@@ -259,8 +263,10 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	ExternalRenderComponents.Reset();
 	NextInstanceId = 1;
 	LastSeenRenderCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
+	RenderStateRecoveryAttempts = 0;
 	bRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
+	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
 	CurrentRenderSettings = FOptimizedSkeletalMeshRenderSettings();
 	ActiveRenderSettings = CurrentRenderSettings;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
@@ -270,6 +276,24 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 
 void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 {
+	static bool bLoggedTickProbe = false;
+	if (!bLoggedTickProbe)
+	{
+		bLoggedTickProbe = true;
+		const UWorld* world = GetWorld();
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("OSM Subsystem TickProbe: world=%s type=%d netmode=%d instances=%d renderComp=%s registered=%d renderState=%d"),
+			*GetNameSafe(world),
+			world ? static_cast<int32>(world->WorldType) : -1,
+			world ? static_cast<int32>(world->GetNetMode()) : -1,
+			Instances.Num(),
+			RenderComponent ? TEXT("yes") : TEXT("no"),
+			(RenderComponent && RenderComponent->IsRegistered()) ? 1 : 0,
+			(RenderComponent && RenderComponent->IsRenderStateCreated()) ? 1 : 0);
+	}
+
 	const int32 currentCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
 	if (LastSeenRenderCVarVersion != currentCVarVersion)
 	{
@@ -282,6 +306,30 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 	}
 
 	EnsureRenderBridge();
+	if (RenderComponent && RenderComponent->IsRegistered() && !RenderComponent->IsRenderStateCreated())
+	{
+		UWorld* world = GetWorld();
+		if (world && world->IsGameWorld() && world->GetNetMode() != NM_DedicatedServer && RenderStateRecoveryAttempts < 8)
+		{
+			++RenderStateRecoveryAttempts;
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("OSM RenderState recovery: attempt=%d world=%s type=%d netmode=%d"),
+				RenderStateRecoveryAttempts,
+				*GetNameSafe(world),
+				static_cast<int32>(world->WorldType),
+				static_cast<int32>(world->GetNetMode()));
+			RenderComponent->ReregisterComponent();
+			RenderComponent->MarkRenderStateDirty();
+			RenderComponent->RequestRenderRefresh();
+		}
+	}
+	else if (RenderComponent && RenderComponent->IsRenderStateCreated())
+	{
+		RenderStateRecoveryAttempts = 0;
+	}
+
 	TickAnimation(InDeltaTime);
 	if (RenderComponent && HasDirtyRenderVisibleBonePalettes() && RenderComponent->PushBonePalettesToRenderThread())
 	{
@@ -637,6 +685,11 @@ FOptimizedSkeletalMeshAnimationStats UOptimizedSkeletalMeshWorldSubsystem::GetLa
 	return LastAnimationStats;
 }
 
+FOptimizedSkeletalMeshRenderStats UOptimizedSkeletalMeshWorldSubsystem::GetLastRenderStats() const
+{
+	return LastRenderStats;
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
 {
 	CurrentRenderSettings = OptimizedSkeletalMesh::NormalizeRenderSettings(InSettings);
@@ -765,6 +818,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::UpdateRenderVisibleInstanceIds(
 	RenderVisibleInstanceIds = MoveTemp(newVisibleInstanceIds);
 }
 
+void UOptimizedSkeletalMeshWorldSubsystem::UpdateLastRenderStats(const FOptimizedSkeletalMeshRenderStats& InStats)
+{
+	LastRenderStats = InStats;
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::SetExternalRenderBridgeActive(const bool bInActive)
 {
 	bExternalRenderBridgeActive = bInActive;
@@ -792,7 +850,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::EnsureRenderBridge()
 	}
 
 	UWorld* world = GetWorld();
-	if (!world || world->bIsTearingDown)
+	if (!world || world->bIsTearingDown || world->GetNetMode() == NM_DedicatedServer)
 	{
 		return;
 	}
@@ -800,28 +858,79 @@ void UOptimizedSkeletalMeshWorldSubsystem::EnsureRenderBridge()
 	if (!RenderBridgeActor)
 	{
 		FActorSpawnParameters spawnParameters;
-		spawnParameters.Name = MakeUniqueObjectName(world->PersistentLevel, AActor::StaticClass(), TEXT("OptimizedSkeletalMeshRenderBridge"));
+		spawnParameters.Name = MakeUniqueObjectName(
+			world->PersistentLevel,
+			AOptimizedSkeletalMeshRenderBridgeActor::StaticClass(),
+			TEXT("OptimizedSkeletalMeshRenderBridge"));
 		spawnParameters.ObjectFlags |= RF_Transient;
 		spawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-		RenderBridgeActor = world->SpawnActor<AActor>(spawnParameters);
+		RenderBridgeActor = world->SpawnActor<AOptimizedSkeletalMeshRenderBridgeActor>(spawnParameters);
 		if (RenderBridgeActor)
 		{
 			RenderBridgeActor->SetCanBeDamaged(false);
 			RenderBridgeActor->SetActorEnableCollision(false);
+			RenderBridgeActor->SetActorHiddenInGame(false);
+			RenderBridgeActor->SetHidden(false);
 		}
 	}
 
 	if (RenderBridgeActor && !RenderComponent)
 	{
-		RenderComponent = NewObject<UOptimizedSkeletalMeshRenderComponent>(
-			RenderBridgeActor,
-			TEXT("OptimizedSkeletalMeshRenderComponent"),
-			RF_Transient);
+		if (const AOptimizedSkeletalMeshRenderBridgeActor* bridgeActor =
+				Cast<AOptimizedSkeletalMeshRenderBridgeActor>(RenderBridgeActor.Get()))
+		{
+			RenderComponent = bridgeActor->GetRenderComponent();
+		}
+
+		if (RenderComponent)
+		{
+			RenderComponent->SetOptimizedSkeletalMeshSubsystem(this);
+			RenderComponent->SetHiddenInGame(false, true);
+			RenderComponent->SetVisibility(true, true);
+			if (!RenderComponent->IsRegistered())
+			{
+				RenderComponent->RegisterComponentWithWorld(world);
+			}
+
+			ApplyRenderSettingsToComponent(RenderComponent);
+			RenderComponent->RequestRenderRefresh();
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("OSM EnsureRenderBridge: using bridge actor component, registered=%d renderState=%d world=%s type=%d netmode=%d"),
+				RenderComponent->IsRegistered() ? 1 : 0,
+				RenderComponent->IsRenderStateCreated() ? 1 : 0,
+				*GetNameSafe(world),
+				static_cast<int32>(world->WorldType),
+				static_cast<int32>(world->GetNetMode()));
+		}
+	}
+	else if (RenderBridgeActor && RenderComponent && !RenderComponent->IsRegistered())
+	{
 		RenderComponent->SetOptimizedSkeletalMeshSubsystem(this);
-		RenderBridgeActor->AddInstanceComponent(RenderComponent);
+		if (RenderComponent->GetOwner() != RenderBridgeActor)
+		{
+			RenderComponent->Rename(nullptr, RenderBridgeActor);
+			RenderBridgeActor->AddInstanceComponent(RenderComponent);
+		}
+
+		RenderBridgeActor->SetActorHiddenInGame(false);
+		RenderBridgeActor->SetHidden(false);
+		RenderComponent->SetHiddenInGame(false, true);
+		RenderComponent->SetVisibility(true, true);
 		RenderComponent->RegisterComponentWithWorld(world);
 		ApplyRenderSettingsToComponent(RenderComponent);
+		RenderComponent->RequestRenderRefresh();
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("OSM EnsureRenderBridge: re-registered component, registered=%d renderState=%d world=%s type=%d netmode=%d"),
+			RenderComponent->IsRegistered() ? 1 : 0,
+			RenderComponent->IsRenderStateCreated() ? 1 : 0,
+			*GetNameSafe(world),
+			static_cast<int32>(world->WorldType),
+			static_cast<int32>(world->GetNetMode()));
 	}
 }
 
