@@ -6,3 +6,8 @@
 // dedicated vertex factory type and shader permutation path. Skinning-specific
 // inputs will be layered here next.
 #include "/Engine/Private/LocalVertexFactory.ush"
+
+Buffer<uint> OptimizedInstancePaletteOffsets;
+Buffer<uint> OptimizedSectionBoneMap;
+uint OptimizedInstancePaletteOffsetCount;
+uint OptimizedSectionBoneMapCount;

@@ -96,6 +96,15 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderStats
 	int32 SkinningGPUSkinFallbackDraws = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningGPUSkinDraws = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningGPUInstanceOffsetEntries = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
+	int32 SkinningGPUSectionBoneMapEntries = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
 	TArray<int32> VisibleInstancesByLOD;
 };
 

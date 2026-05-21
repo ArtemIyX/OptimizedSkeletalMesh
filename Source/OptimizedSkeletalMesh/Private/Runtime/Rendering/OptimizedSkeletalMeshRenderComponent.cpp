@@ -4,6 +4,7 @@
 
 #include "Async/Async.h"
 #include "DynamicMeshBuilder.h"
+#include "DynamicBufferAllocator.h"
 #include "ConvexVolume.h"
 #include "Engine/Engine.h"
 #include "Engine/skeletalMesh.h"
@@ -64,17 +65,24 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("16-bit Bone Weight LODs"), STAT_OptimizedSkelet
 DECLARE_DWORD_COUNTER_STAT(TEXT("Missing Skin Weight LODs"), STAT_OptimizedSkeletalMeshSkinningMissingSkinWeightLODs, STATGROUP_OptimizedSkeletalMeshSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Skin Ready LODs"), STAT_OptimizedSkeletalMeshSkinningGPUSkinReadyLODs, STATGROUP_OptimizedSkeletalMeshSkinning);
 DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Skin Fallback Draws"), STAT_OptimizedSkeletalMeshSkinningGPUSkinFallbackDraws, STATGROUP_OptimizedSkeletalMeshSkinning);
+DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Skin Draws"), STAT_OptimizedSkeletalMeshSkinningGPUSkinDraws, STATGROUP_OptimizedSkeletalMeshSkinning);
+DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Instance Offset Entries"), STAT_OptimizedSkeletalMeshSkinningGPUInstanceOffsetEntries, STATGROUP_OptimizedSkeletalMeshSkinning);
+DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Section Bone Map Entries"), STAT_OptimizedSkeletalMeshSkinningGPUSectionBoneMapEntries, STATGROUP_OptimizedSkeletalMeshSkinning);
 
 struct FOptimizedSkeletalMeshVertexFactoryUserData : public FOneFrameResource
 {
 	FRHIShaderResourceView* SkinWeightDataSRV = nullptr;
 	FRHIShaderResourceView* SkinWeightLookupSRV = nullptr;
 	FRHIShaderResourceView* BonePaletteSRV = nullptr;
+	FRHIShaderResourceView* InstancePaletteOffsetSRV = nullptr;
+	FRHIShaderResourceView* SectionBoneMapSRV = nullptr;
 	uint32 MaxBoneInfluences = 0;
 	uint32 BoneIndexByteSize = 0;
 	uint32 BoneWeightByteSize = 0;
 	uint32 SkinWeightStride = 0;
 	uint32 SkinWeightBoneWeightsOffset = 0;
+	uint32 InstancePaletteOffsetCount = 0;
+	uint32 SectionBoneMapCount = 0;
 	uint32 bVariableBonesPerVertex = 0;
 };
 
@@ -122,11 +130,15 @@ public:
 		SkinWeightDataParameter.Bind(InParameterMap, TEXT("OptimizedSkinWeightData"));
 		SkinWeightLookupParameter.Bind(InParameterMap, TEXT("OptimizedSkinWeightLookup"));
 		BonePaletteParameter.Bind(InParameterMap, TEXT("OptimizedBonePalette"));
+		InstancePaletteOffsetParameter.Bind(InParameterMap, TEXT("OptimizedInstancePaletteOffsets"));
+		SectionBoneMapParameter.Bind(InParameterMap, TEXT("OptimizedSectionBoneMap"));
 		MaxBoneInfluencesParameter.Bind(InParameterMap, TEXT("OptimizedMaxBoneInfluences"));
 		BoneIndexByteSizeParameter.Bind(InParameterMap, TEXT("OptimizedBoneIndexByteSize"));
 		BoneWeightByteSizeParameter.Bind(InParameterMap, TEXT("OptimizedBoneWeightByteSize"));
 		SkinWeightStrideParameter.Bind(InParameterMap, TEXT("OptimizedSkinWeightStride"));
 		SkinWeightBoneWeightsOffsetParameter.Bind(InParameterMap, TEXT("OptimizedSkinWeightBoneWeightsOffset"));
+		InstancePaletteOffsetCountParameter.Bind(InParameterMap, TEXT("OptimizedInstancePaletteOffsetCount"));
+		SectionBoneMapCountParameter.Bind(InParameterMap, TEXT("OptimizedSectionBoneMapCount"));
 		VariableBonesPerVertexParameter.Bind(InParameterMap, TEXT("OptimizedVariableBonesPerVertex"));
 	}
 
@@ -169,11 +181,19 @@ public:
 			InShaderBindings.Add(
 				BonePaletteParameter,
 				userData->BonePaletteSRV ? userData->BonePaletteSRV : GNullColorVertexBuffer.VertexBufferSRV.GetReference());
+			InShaderBindings.Add(
+				InstancePaletteOffsetParameter,
+				userData->InstancePaletteOffsetSRV ? userData->InstancePaletteOffsetSRV : GNullColorVertexBuffer.VertexBufferSRV.GetReference());
+			InShaderBindings.Add(
+				SectionBoneMapParameter,
+				userData->SectionBoneMapSRV ? userData->SectionBoneMapSRV : GNullColorVertexBuffer.VertexBufferSRV.GetReference());
 			InShaderBindings.Add(MaxBoneInfluencesParameter, userData->MaxBoneInfluences);
 			InShaderBindings.Add(BoneIndexByteSizeParameter, userData->BoneIndexByteSize);
 			InShaderBindings.Add(BoneWeightByteSizeParameter, userData->BoneWeightByteSize);
 			InShaderBindings.Add(SkinWeightStrideParameter, userData->SkinWeightStride);
 			InShaderBindings.Add(SkinWeightBoneWeightsOffsetParameter, userData->SkinWeightBoneWeightsOffset);
+			InShaderBindings.Add(InstancePaletteOffsetCountParameter, userData->InstancePaletteOffsetCount);
+			InShaderBindings.Add(SectionBoneMapCountParameter, userData->SectionBoneMapCount);
 			InShaderBindings.Add(VariableBonesPerVertexParameter, userData->bVariableBonesPerVertex);
 		}
 	}
@@ -182,11 +202,15 @@ private:
 	LAYOUT_FIELD(FShaderResourceParameter, SkinWeightDataParameter);
 	LAYOUT_FIELD(FShaderResourceParameter, SkinWeightLookupParameter);
 	LAYOUT_FIELD(FShaderResourceParameter, BonePaletteParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, InstancePaletteOffsetParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, SectionBoneMapParameter);
 	LAYOUT_FIELD(FShaderParameter, MaxBoneInfluencesParameter);
 	LAYOUT_FIELD(FShaderParameter, BoneIndexByteSizeParameter);
 	LAYOUT_FIELD(FShaderParameter, BoneWeightByteSizeParameter);
 	LAYOUT_FIELD(FShaderParameter, SkinWeightStrideParameter);
 	LAYOUT_FIELD(FShaderParameter, SkinWeightBoneWeightsOffsetParameter);
+	LAYOUT_FIELD(FShaderParameter, InstancePaletteOffsetCountParameter);
+	LAYOUT_FIELD(FShaderParameter, SectionBoneMapCountParameter);
 	LAYOUT_FIELD(FShaderParameter, VariableBonesPerVertexParameter);
 };
 
@@ -356,6 +380,25 @@ namespace OptimizedSkeletalMesh
 	{
 		TArray<const FRenderInstance*> InInstances;
 	};
+
+	static FRHIShaderResourceView* UploadUInt32DynamicBuffer(
+		FMeshElementCollector& InCollector,
+		TConstArrayView<uint32> InValues)
+	{
+		if (InValues.IsEmpty())
+		{
+			return nullptr;
+		}
+
+		FGlobalDynamicReadBuffer::FAllocation allocation = InCollector.GetDynamicReadBuffer().AllocateUInt32(InValues.Num());
+		if (!allocation.IsValid())
+		{
+			return nullptr;
+		}
+
+		FMemory::Memcpy(allocation.Buffer, InValues.GetData(), InValues.Num() * sizeof(uint32));
+		return allocation.SRV;
+	}
 
 	static void AddVisibleLODStat(FOptimizedSkeletalMeshRenderStats& InStats, const int32 lodIndex, const int32 InCount)
 	{
@@ -1043,28 +1086,26 @@ public:
 							frameStats.SkinningGPUSkinFallbackDraws += visibleInstances.Num();
 						}
 
-						FOptimizedSkeletalMeshVertexFactoryUserData* skinnedFactoryUserData = nullptr;
+						TArray<uint32> instancePaletteOffsets;
+						FRHIShaderResourceView* instancePaletteOffsetSRV = nullptr;
 						if (bUseGpuSkinningForLOD)
 						{
-							skinnedFactoryUserData =
-								&InCollector.AllocateOneFrameResource<FOptimizedSkeletalMeshVertexFactoryUserData>();
-							skinnedFactoryUserData->SkinWeightDataSRV =
-								lodResources->DirectResources->SkinWeightVertexBuffer->GetDataVertexBuffer()->GetSRV();
-							skinnedFactoryUserData->SkinWeightLookupSRV =
-								lodResources->DirectResources->SkinWeightVertexBuffer->GetLookupVertexBuffer()->GetSRV();
-							skinnedFactoryUserData->BonePaletteSRV =
-								BonePalettePooledBuffer
-								? const_cast<FRDGPooledBuffer*>(BonePalettePooledBuffer.GetReference())->GetSRV()
-								: nullptr;
-							skinnedFactoryUserData->MaxBoneInfluences =
-								static_cast<uint32>(lodResources->DirectResources->MaxBoneInfluences);
-							skinnedFactoryUserData->BoneIndexByteSize = lodResources->DirectResources->BoneIndexByteSize;
-							skinnedFactoryUserData->BoneWeightByteSize = lodResources->DirectResources->BoneWeightByteSize;
-							skinnedFactoryUserData->SkinWeightStride = lodResources->DirectResources->SkinWeightStride;
-							skinnedFactoryUserData->SkinWeightBoneWeightsOffset =
-								lodResources->DirectResources->SkinWeightBoneWeightsOffset;
-							skinnedFactoryUserData->bVariableBonesPerVertex =
-								lodResources->DirectResources->bVariableBonesPerVertex ? 1u : 0u;
+							instancePaletteOffsets.Reserve(visibleInstances.Num());
+							for (const OptimizedSkeletalMesh::FRenderInstance* visibleInstance : visibleInstances)
+							{
+								const OptimizedSkeletalMesh::FBonePaletteRange* range =
+									visibleInstance ? BonePaletteRangesByInstanceId.Find(visibleInstance->InstanceId) : nullptr;
+								instancePaletteOffsets.Add(range ? range->Offset : 0u);
+								if (!range)
+								{
+									++frameStats.SkinningGPUSkinFallbackDraws;
+								}
+							}
+
+							instancePaletteOffsetSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
+								InCollector,
+								MakeArrayView(instancePaletteOffsets));
+							frameStats.SkinningGPUInstanceOffsetEntries += instancePaletteOffsets.Num();
 						}
 
 						FDynamicPrimitiveUniformBuffer& dynamicPrimitiveUniformBuffer =
@@ -1093,6 +1134,45 @@ public:
 							if (!MaterialRenderProxy)
 							{
 								continue;
+							}
+
+							FOptimizedSkeletalMeshVertexFactoryUserData* skinnedFactoryUserData = nullptr;
+							if (bUseGpuSkinningForLOD)
+							{
+								TArray<uint32>& sectionBoneMap = InCollector.AllocateOneFrameResource<TArray<uint32>>();
+								sectionBoneMap.Reserve(renderSection.BoneMap.Num());
+								for (const FBoneIndexType boneIndex : renderSection.BoneMap)
+								{
+									sectionBoneMap.Add(static_cast<uint32>(boneIndex));
+								}
+
+								skinnedFactoryUserData =
+									&InCollector.AllocateOneFrameResource<FOptimizedSkeletalMeshVertexFactoryUserData>();
+								skinnedFactoryUserData->SkinWeightDataSRV =
+									lodResources->DirectResources->SkinWeightVertexBuffer->GetDataVertexBuffer()->GetSRV();
+								skinnedFactoryUserData->SkinWeightLookupSRV =
+									lodResources->DirectResources->SkinWeightVertexBuffer->GetLookupVertexBuffer()->GetSRV();
+								skinnedFactoryUserData->BonePaletteSRV =
+									BonePalettePooledBuffer
+									? const_cast<FRDGPooledBuffer*>(BonePalettePooledBuffer.GetReference())->GetSRV()
+									: nullptr;
+								skinnedFactoryUserData->InstancePaletteOffsetSRV = instancePaletteOffsetSRV;
+								skinnedFactoryUserData->SectionBoneMapSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
+									InCollector,
+									MakeArrayView(sectionBoneMap));
+								skinnedFactoryUserData->MaxBoneInfluences =
+									static_cast<uint32>(lodResources->DirectResources->MaxBoneInfluences);
+								skinnedFactoryUserData->BoneIndexByteSize = lodResources->DirectResources->BoneIndexByteSize;
+								skinnedFactoryUserData->BoneWeightByteSize = lodResources->DirectResources->BoneWeightByteSize;
+								skinnedFactoryUserData->SkinWeightStride = lodResources->DirectResources->SkinWeightStride;
+								skinnedFactoryUserData->SkinWeightBoneWeightsOffset =
+									lodResources->DirectResources->SkinWeightBoneWeightsOffset;
+								skinnedFactoryUserData->InstancePaletteOffsetCount = instancePaletteOffsets.Num();
+								skinnedFactoryUserData->SectionBoneMapCount = sectionBoneMap.Num();
+								skinnedFactoryUserData->bVariableBonesPerVertex =
+									lodResources->DirectResources->bVariableBonesPerVertex ? 1u : 0u;
+								++frameStats.SkinningGPUSkinDraws;
+								frameStats.SkinningGPUSectionBoneMapEntries += sectionBoneMap.Num();
 							}
 
 							FMeshBatch& mesh = InCollector.AllocateMesh();
@@ -1615,6 +1695,9 @@ void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningMissingSkinWeightLODs, InStats.SkinningMissingSkinWeightLODs);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningGPUSkinReadyLODs, InStats.SkinningGPUSkinReadyLODs);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningGPUSkinFallbackDraws, InStats.SkinningGPUSkinFallbackDraws);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningGPUSkinDraws, InStats.SkinningGPUSkinDraws);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningGPUInstanceOffsetEntries, InStats.SkinningGPUInstanceOffsetEntries);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSkinningGPUSectionBoneMapEntries, InStats.SkinningGPUSectionBoneMapEntries);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD0, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 0));
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD1, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 1));
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleLOD2, OptimizedSkeletalMesh::GetVisibleLODStat(InStats, 2));
