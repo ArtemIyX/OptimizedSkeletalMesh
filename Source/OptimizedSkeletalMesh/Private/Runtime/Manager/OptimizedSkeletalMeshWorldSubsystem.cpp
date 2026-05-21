@@ -627,7 +627,9 @@ float UOptimizedSkeletalMeshWorldSubsystem::GetEffectiveAnimationUpdateRateHz(
 	const float InNearestCameraDistance) const
 {
 	const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>();
-	if (!settings || !settings->bEnableDistanceBasedAnimationUpdateRate || InNearestCameraDistance < 0.0f)
+	if (!settings
+		|| settings->DistanceBasedRateMode == EOptimizedSkeletalMeshDistanceBasedRateMode::Static
+		|| InNearestCameraDistance < 0.0f)
 	{
 		return InDesc.AnimationUpdateRateHz;
 	}
@@ -648,7 +650,23 @@ float UOptimizedSkeletalMeshWorldSubsystem::GetEffectiveAnimationUpdateRateHz(
 float UOptimizedSkeletalMeshWorldSubsystem::GetUpdateRateScaleForDistance(const float InDistance)
 {
 	const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>();
-	if (!settings || settings->DistanceUpdateRateBands.IsEmpty())
+	if (!settings)
+	{
+		return 1.0f;
+	}
+
+	if (settings->DistanceBasedRateMode == EOptimizedSkeletalMeshDistanceBasedRateMode::Static)
+	{
+		return 1.0f;
+	}
+
+	if (settings->DistanceBasedRateMode == EOptimizedSkeletalMeshDistanceBasedRateMode::DistanceBasedCurve)
+	{
+		const UCurveFloat* updateRateCurve = settings->DistanceUpdateRateCurve.LoadSynchronous();
+		return updateRateCurve ? FMath::Max(0.0f, updateRateCurve->GetFloatValue(InDistance)) : 1.0f;
+	}
+
+	if (settings->DistanceUpdateRateBands.IsEmpty())
 	{
 		return 1.0f;
 	}
@@ -818,7 +836,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 			const float effectiveUpdateRateHz = GetEffectiveAnimationUpdateRateHz(
 				*desc,
 				bHasCameraDistance ? nearestCameraDistance : -1.0f);
-			if (bHasCameraDistance && effectiveUpdateRateHz > 0.0f)
+			const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>();
+			const bool bUsesDistanceRateScaling =
+				settings
+				&& settings->DistanceBasedRateMode != EOptimizedSkeletalMeshDistanceBasedRateMode::Static;
+			if (bUsesDistanceRateScaling && bHasCameraDistance && effectiveUpdateRateHz > 0.0f)
 			{
 				++newStats.DistanceRateScaledInstances;
 				if (newStats.MinEffectiveUpdateRateHz <= 0.0f)

@@ -3,8 +3,17 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Curves/CurveFloat.h"
 #include "Engine/DeveloperSettings.h"
 #include "OptimizedSkeletalMeshSettings.generated.h"
+
+UENUM(BlueprintType)
+enum class EOptimizedSkeletalMeshDistanceBasedRateMode : uint8
+{
+	Static UMETA(DisplayName = "Static"),
+	DistanceBasedArray UMETA(DisplayName = "Distance Based Array"),
+	DistanceBasedCurve UMETA(DisplayName = "Distance Based Curve")
+};
 
 USTRUCT(BlueprintType)
 struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshDistanceUpdateRateBand
@@ -21,7 +30,7 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshDistanceUpdateRateBand
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Animation", meta = (ClampMin = "0.0"))
 	float Distance = 1000.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Animation", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Animation", meta = (ClampMin = "0.0"))
 	float UpdateRateScale = 1.0f;
 };
 
@@ -37,7 +46,8 @@ public:
 
 #pragma region Animation
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation")
-	bool bEnableDistanceBasedAnimationUpdateRate = true;
+	EOptimizedSkeletalMeshDistanceBasedRateMode DistanceBasedRateMode =
+		EOptimizedSkeletalMeshDistanceBasedRateMode::DistanceBasedArray;
 
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation", meta = (ClampMin = "0.0"))
 	float DefaultAnimationUpdateRateHz = 30.0f;
@@ -45,12 +55,15 @@ public:
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation", meta = (ClampMin = "0.0"))
 	float MinAnimationUpdateRateHz = 5.0f;
 
-	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation")
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation", meta = (EditCondition = "DistanceBasedRateMode == EOptimizedSkeletalMeshDistanceBasedRateMode::DistanceBasedArray"))
 	TArray<FOptimizedSkeletalMeshDistanceUpdateRateBand> DistanceUpdateRateBands = {
 		{ 1000.0f, 1.0f },
 		{ 2000.0f, 0.8f },
 		{ 3000.0f, 0.5f },
 		{ 5000.0f, 0.25f },
 	};
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation", meta = (EditCondition = "DistanceBasedRateMode == EOptimizedSkeletalMeshDistanceBasedRateMode::DistanceBasedCurve"))
+	TSoftObjectPtr<UCurveFloat> DistanceUpdateRateCurve;
 #pragma endregion
 };
