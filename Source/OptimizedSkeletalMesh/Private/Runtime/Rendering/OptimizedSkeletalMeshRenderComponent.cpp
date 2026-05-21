@@ -76,6 +76,7 @@ struct FOptimizedSkeletalMeshVertexFactoryUserData : public FOneFrameResource
 	FRHIShaderResourceView* BonePaletteSRV = nullptr;
 	FRHIShaderResourceView* InstancePaletteOffsetSRV = nullptr;
 	FRHIShaderResourceView* SectionBoneMapSRV = nullptr;
+	uint32 BonePaletteMatrixCount = 0;
 	uint32 MaxBoneInfluences = 0;
 	uint32 BoneIndexByteSize = 0;
 	uint32 BoneWeightByteSize = 0;
@@ -132,6 +133,7 @@ public:
 		BonePaletteParameter.Bind(InParameterMap, TEXT("OptimizedBonePalette"));
 		InstancePaletteOffsetParameter.Bind(InParameterMap, TEXT("OptimizedInstancePaletteOffsets"));
 		SectionBoneMapParameter.Bind(InParameterMap, TEXT("OptimizedSectionBoneMap"));
+		BonePaletteMatrixCountParameter.Bind(InParameterMap, TEXT("OptimizedBonePaletteMatrixCount"));
 		MaxBoneInfluencesParameter.Bind(InParameterMap, TEXT("OptimizedMaxBoneInfluences"));
 		BoneIndexByteSizeParameter.Bind(InParameterMap, TEXT("OptimizedBoneIndexByteSize"));
 		BoneWeightByteSizeParameter.Bind(InParameterMap, TEXT("OptimizedBoneWeightByteSize"));
@@ -187,6 +189,7 @@ public:
 			InShaderBindings.Add(
 				SectionBoneMapParameter,
 				userData->SectionBoneMapSRV ? userData->SectionBoneMapSRV : GNullColorVertexBuffer.VertexBufferSRV.GetReference());
+			InShaderBindings.Add(BonePaletteMatrixCountParameter, userData->BonePaletteMatrixCount);
 			InShaderBindings.Add(MaxBoneInfluencesParameter, userData->MaxBoneInfluences);
 			InShaderBindings.Add(BoneIndexByteSizeParameter, userData->BoneIndexByteSize);
 			InShaderBindings.Add(BoneWeightByteSizeParameter, userData->BoneWeightByteSize);
@@ -204,6 +207,7 @@ private:
 	LAYOUT_FIELD(FShaderResourceParameter, BonePaletteParameter);
 	LAYOUT_FIELD(FShaderResourceParameter, InstancePaletteOffsetParameter);
 	LAYOUT_FIELD(FShaderResourceParameter, SectionBoneMapParameter);
+	LAYOUT_FIELD(FShaderParameter, BonePaletteMatrixCountParameter);
 	LAYOUT_FIELD(FShaderParameter, MaxBoneInfluencesParameter);
 	LAYOUT_FIELD(FShaderParameter, BoneIndexByteSizeParameter);
 	LAYOUT_FIELD(FShaderParameter, BoneWeightByteSizeParameter);
@@ -1160,6 +1164,8 @@ public:
 								skinnedFactoryUserData->SectionBoneMapSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
 									InCollector,
 									MakeArrayView(sectionBoneMap));
+								skinnedFactoryUserData->BonePaletteMatrixCount =
+									BonePalettePooledBuffer ? static_cast<uint32>(SkinningGPUPaletteMatrices) : 0u;
 								skinnedFactoryUserData->MaxBoneInfluences =
 									static_cast<uint32>(lodResources->DirectResources->MaxBoneInfluences);
 								skinnedFactoryUserData->BoneIndexByteSize = lodResources->DirectResources->BoneIndexByteSize;
