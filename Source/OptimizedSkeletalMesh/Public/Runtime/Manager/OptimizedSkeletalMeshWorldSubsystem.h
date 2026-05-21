@@ -72,6 +72,9 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceDesc
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation")
 	bool bPlayAnimation = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Animation", meta = (ClampMin = "0.0"))
+	float AnimationUpdateRateHz = 0.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh")
 	bool bVisible = true;
 };
@@ -86,6 +89,18 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshAnimationStats
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
 	int32 AnimatedInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 ActiveAnimationInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 DirtyAnimationInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 SkippedUpdateRateInstances = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
+	int32 ParallelPoseBatches = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Animation")
 	int32 AdvancedInstances = 0;
@@ -193,6 +208,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Animation")
 	int32 GetCachedBonePaletteCount() const;
 
+	bool HasDirtyBonePalettes() const
+	{
+		return bBonePalettesDirty;
+	}
+
+	void ClearDirtyBonePalettes()
+	{
+		bBonePalettesDirty = false;
+		DirtyBonePaletteInstanceIds.Reset();
+	}
+
 	bool IsRenderDataDirty() const
 	{
 		return bRenderDataDirty;
@@ -215,12 +241,19 @@ private:
 	int32 AllocateInstanceId();
 	bool IsValidInstanceId(int32 InInstanceId) const;
 	void MarkRenderDataDirty();
+	void RefreshAnimationTracking(int32 InInstanceId, const FOptimizedSkeletalMeshInstanceDesc& InDesc, bool bInForceDirty);
+	void RemoveAnimationTracking(int32 InInstanceId);
+	static bool ShouldTickAnimation(const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 #pragma endregion
 
 #pragma region Animation
 	void TickAnimation(float InDeltaTime);
 	FOptimizedSkeletalMeshAnimationMeshCache* FindOrBuildAnimationMeshCache(USkeletalMesh* InSkeletalMesh);
 	bool EvaluateInstanceBonePalette(const FOptimizedSkeletalMeshInstanceDesc& InDesc, TArray<FMatrix44f>& OutBonePalette);
+	static bool EvaluateInstanceBonePaletteWithCache(
+		const FOptimizedSkeletalMeshInstanceDesc& InDesc,
+		const FOptimizedSkeletalMeshAnimationMeshCache& InMeshCache,
+		TArray<FMatrix44f>& OutBonePalette);
 	static float WrapAnimationTime(float InAnimationTime, float InSequenceLength);
 #pragma endregion
 
@@ -239,9 +272,14 @@ private:
 
 	TMap<TObjectKey<USkeletalMesh>, FOptimizedSkeletalMeshAnimationMeshCache> AnimationMeshCaches;
 	TMap<int32, TArray<FMatrix44f>> InstanceBonePalettes;
+	TSet<int32> ActiveAnimationInstanceIds;
+	TSet<int32> DirtyAnimationInstanceIds;
+	TSet<int32> DirtyBonePaletteInstanceIds;
+	TMap<int32, float> AnimationUpdateAccumulators;
 
 	int32 NextInstanceId = 1;
 	bool bRenderDataDirty = false;
+	bool bBonePalettesDirty = false;
 	bool bExternalRenderBridgeActive = false;
 	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;
 #pragma endregion

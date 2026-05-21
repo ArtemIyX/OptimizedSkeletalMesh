@@ -1636,13 +1636,13 @@ void UOptimizedSkeletalMeshRenderComponent::SetDrawCullTestBounds(const bool bIn
 	RequestRenderRefresh();
 }
 
-void UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
+bool UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
 {
 	check(IsInGameThread());
 
 	if (!Subsystem || !SceneProxy)
 	{
-		return;
+		return false;
 	}
 
 	TArray<FOptimizedSkeletalMeshBonePaletteSnapshot> paletteSnapshots;
@@ -1670,6 +1670,8 @@ void UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
 		[optimizedSceneProxy, renderSnapshots = MoveTemp(renderSnapshots)](FRHICommandListImmediate& InRHICmdList) mutable {
 			optimizedSceneProxy->UpdateBonePalettes_RenderThread(InRHICmdList, MoveTemp(renderSnapshots));
 		});
+
+	return true;
 }
 
 void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(

@@ -129,7 +129,7 @@ public:
 	void SetDrawCullingDebug(bool bInDrawCullingDebug);
 	void SetDrawCullTestBounds(bool bInDrawCullTestBounds);
 	void RequestRenderRefresh();
-	void PushBonePalettesToRenderThread();
+	bool PushBonePalettesToRenderThread();
 #pragma endregion
 
 #pragma region Accessors

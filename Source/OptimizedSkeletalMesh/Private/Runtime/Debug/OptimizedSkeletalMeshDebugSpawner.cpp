@@ -40,15 +40,19 @@ void AOptimizedSkeletalMeshDebugSpawner::Tick(const float InDeltaSeconds)
 {
 	Super::Tick(InDeltaSeconds);
 
-	if (PreviewRenderComponent)
+	if (UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetOptimizedSubsystem())
 	{
-		PreviewRenderComponent->PushBonePalettesToRenderThread();
-		LastRenderStats = PreviewRenderComponent->GetLastRenderStats();
+		if (PreviewRenderComponent && subsystem->HasDirtyBonePalettes() && PreviewRenderComponent->PushBonePalettesToRenderThread())
+		{
+			subsystem->ClearDirtyBonePalettes();
+		}
+
+		LastAnimationStats = subsystem->GetLastAnimationStats();
 	}
 
-	if (const UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetOptimizedSubsystem())
+	if (PreviewRenderComponent)
 	{
-		LastAnimationStats = subsystem->GetLastAnimationStats();
+		LastRenderStats = PreviewRenderComponent->GetLastRenderStats();
 	}
 }
 
@@ -116,6 +120,7 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 			desc.AnimationPlayRate = AnimationPlayRate;
 			desc.bLoopAnimation = bLoopAnimation;
 			desc.bPlayAnimation = bPlayAnimation;
+			desc.AnimationUpdateRateHz = AnimationUpdateRateHz;
 			desc.bVisible = true;
 
 			const FOptimizedSkeletalMeshInstanceHandle handle = subsystem->RegisterInstance(desc);
