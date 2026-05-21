@@ -17,29 +17,29 @@
 #include "Runtime/Settings/OptimizedSkeletalMeshSettings.h"
 #include "Stats/Stats.h"
 
-DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OptimizedSkeletalMesh Animation"), STATGROUP_OptimizedSkeletalMeshAnimation, STATCAT_Advanced);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Registered Instances"), STAT_OptimizedSkeletalMeshAnimationRegisteredInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Animated Instances"), STAT_OptimizedSkeletalMeshAnimationAnimatedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Active Animation Instances"), STAT_OptimizedSkeletalMeshAnimationActiveAnimationInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty Animation Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyAnimationInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Skipped Update Rate Instances"), STAT_OptimizedSkeletalMeshAnimationSkippedUpdateRateInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Distance Rate Scaled Instances"), STAT_OptimizedSkeletalMeshAnimationDistanceRateScaledInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Parallel Pose Batches"), STAT_OptimizedSkeletalMeshAnimationParallelPoseBatches, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Advanced Instances"), STAT_OptimizedSkeletalMeshAnimationAdvancedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Finished Instances"), STAT_OptimizedSkeletalMeshAnimationFinishedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Pose Evaluated Instances"), STAT_OptimizedSkeletalMeshAnimationPoseEvaluatedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Failed Pose Evaluations"), STAT_OptimizedSkeletalMeshAnimationFailedPoseEvaluations, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Bone Palette Instances"), STAT_OptimizedSkeletalMeshAnimationBonePaletteInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Render Visible Animated Instances"), STAT_OptimizedSkeletalMeshAnimationRenderVisibleAnimatedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty CPU Palette Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyCpuPaletteInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty GPU Palette Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyGpuPaletteInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Palette Upload Skipped Instances"), STAT_OptimizedSkeletalMeshAnimationGpuPaletteUploadSkippedInstances, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Total Bone Matrices"), STAT_OptimizedSkeletalMeshAnimationTotalBoneMatrices, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Max Bones Per Instance"), STAT_OptimizedSkeletalMeshAnimationMaxBonesPerInstance, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_FLOAT_COUNTER_STAT(TEXT("Min Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationMinEffectiveUpdateRateHz, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_FLOAT_COUNTER_STAT(TEXT("Max Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationMaxEffectiveUpdateRateHz, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_FLOAT_COUNTER_STAT(TEXT("Average Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationAverageEffectiveUpdateRateHz, STATGROUP_OptimizedSkeletalMeshAnimation);
-DECLARE_FLOAT_COUNTER_STAT(TEXT("Last Delta Seconds"), STAT_OptimizedSkeletalMeshAnimationLastDeltaSeconds, STATGROUP_OptimizedSkeletalMeshAnimation);
+DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Animation"), STATGROUP_OSMAnimation, STATCAT_Advanced);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Registered Instances"), STAT_OptimizedSkeletalMeshAnimationRegisteredInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Animated Instances"), STAT_OptimizedSkeletalMeshAnimationAnimatedInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Active Animation Instances"), STAT_OptimizedSkeletalMeshAnimationActiveAnimationInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty Animation Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyAnimationInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Skipped Update Rate Instances"), STAT_OptimizedSkeletalMeshAnimationSkippedUpdateRateInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Distance Rate Scaled Instances"), STAT_OptimizedSkeletalMeshAnimationDistanceRateScaledInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Parallel Pose Batches"), STAT_OptimizedSkeletalMeshAnimationParallelPoseBatches, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Advanced Instances"), STAT_OptimizedSkeletalMeshAnimationAdvancedInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Finished Instances"), STAT_OptimizedSkeletalMeshAnimationFinishedInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Pose Evaluated Instances"), STAT_OptimizedSkeletalMeshAnimationPoseEvaluatedInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Failed Pose Evaluations"), STAT_OptimizedSkeletalMeshAnimationFailedPoseEvaluations, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Bone Palette Instances"), STAT_OptimizedSkeletalMeshAnimationBonePaletteInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Render Visible Animated Instances"), STAT_OptimizedSkeletalMeshAnimationRenderVisibleAnimatedInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty CPU Palette Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyCpuPaletteInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Dirty GPU Palette Instances"), STAT_OptimizedSkeletalMeshAnimationDirtyGpuPaletteInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("GPU Palette Upload Skipped Instances"), STAT_OptimizedSkeletalMeshAnimationGpuPaletteUploadSkippedInstances, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Total Bone Matrices"), STAT_OptimizedSkeletalMeshAnimationTotalBoneMatrices, STATGROUP_OSMAnimation);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Max Bones Per Instance"), STAT_OptimizedSkeletalMeshAnimationMaxBonesPerInstance, STATGROUP_OSMAnimation);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("Min Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationMinEffectiveUpdateRateHz, STATGROUP_OSMAnimation);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("Max Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationMaxEffectiveUpdateRateHz, STATGROUP_OSMAnimation);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("Average Effective Update Rate Hz"), STAT_OptimizedSkeletalMeshAnimationAverageEffectiveUpdateRateHz, STATGROUP_OSMAnimation);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("Last Delta Seconds"), STAT_OptimizedSkeletalMeshAnimationLastDeltaSeconds, STATGROUP_OSMAnimation);
 
 namespace OptimizedSkeletalMesh
 {
