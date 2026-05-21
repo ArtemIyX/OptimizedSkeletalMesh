@@ -105,7 +105,8 @@ class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshRenderComponent : public U
 	GENERATED_BODY()
 
 public:
-	UOptimizedSkeletalMeshRenderComponent(const FObjectInitializer& ObjectInitializer);
+#pragma region Setup
+	UOptimizedSkeletalMeshRenderComponent(const FObjectInitializer& InObjectInitializer);
 
 	void SetOptimizedSkeletalMeshSubsystem(UOptimizedSkeletalMeshWorldSubsystem* InSubsystem);
 	void SetDrawDebugBounds(bool bInDrawDebugBounds);
@@ -120,7 +121,9 @@ public:
 	void SetDrawCullTestBounds(bool bInDrawCullTestBounds);
 	void RequestRenderRefresh();
 	void PushBonePalettesToRenderThread();
+#pragma endregion
 
+#pragma region Accessors
 	bool ShouldDrawDebugBounds() const { return bDrawDebugBounds; }
 	bool ShouldDrawMeshSections() const { return bDrawMeshSections; }
 	EOptimizedSkeletalMeshDrawMode GetMeshDrawMode() const { return MeshDrawMode; }
@@ -133,13 +136,17 @@ public:
 	bool ShouldDrawCullTestBounds() const { return bDrawCullTestBounds; }
 	const FOptimizedSkeletalMeshRenderStats& GetLastRenderStats() const { return LastRenderStats; }
 	void ApplyRenderStats_GameThread(const FOptimizedSkeletalMeshRenderStats& InStats);
+#pragma endregion
 
+#pragma region UPrimitiveComponent
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
-	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	virtual FBoxSphereBounds CalcBounds(const FTransform& InLocalToWorld) const override;
 	virtual bool ShouldRecreateProxyOnUpdateTransform() const override;
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
+#pragma endregion
 
 private:
+#pragma region Settings
 	UPROPERTY(EditAnywhere, Category = "Optimized Skeletal Mesh|Debug")
 	bool bDrawDebugBounds = true;
 
@@ -172,7 +179,10 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats", meta = (AllowPrivateAccess = "true"))
 	FOptimizedSkeletalMeshRenderStats LastRenderStats;
+#pragma endregion
 
+#pragma region State
 	UPROPERTY(Transient)
 	TObjectPtr<UOptimizedSkeletalMeshWorldSubsystem> Subsystem = nullptr;
+#pragma endregion
 };

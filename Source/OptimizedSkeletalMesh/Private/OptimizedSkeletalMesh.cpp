@@ -9,21 +9,19 @@
 
 void FOptimizedSkeletalMeshModule::StartupModule()
 {
-	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("OptimizedSkeletalMesh"));
-	if (Plugin.IsValid())
+	const TSharedPtr<IPlugin> plugin = IPluginManager::Get().FindPlugin(TEXT("OptimizedSkeletalMesh"));
+	if (plugin.IsValid())
 	{
 		AddShaderSourceDirectoryMapping(
 			TEXT("/Plugin/OptimizedSkeletalMesh"),
-			FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders")));
+			FPaths::Combine(plugin->GetBaseDir(), TEXT("Shaders")));
 	}
 }
 
 void FOptimizedSkeletalMeshModule::ShutdownModule()
 {
-	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
-	// we call this function before unloading the module.
 }
 
 #undef LOCTEXT_NAMESPACE
-	
+
 IMPLEMENT_MODULE(FOptimizedSkeletalMeshModule, OptimizedSkeletalMesh)

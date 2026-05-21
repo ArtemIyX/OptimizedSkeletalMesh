@@ -17,19 +17,24 @@ class OPTIMIZEDSKELETALMESH_API AOptimizedSkeletalMeshDebugSpawner : public AAct
 	GENERATED_BODY()
 
 public:
+#pragma region Lifecycle
 	AOptimizedSkeletalMeshDebugSpawner();
 
-	virtual void OnConstruction(const FTransform& Transform) override;
-	virtual void Tick(float DeltaSeconds) override;
+	virtual void OnConstruction(const FTransform& InTransform) override;
+	virtual void Tick(float InDeltaSeconds) override;
 	virtual void BeginPlay() override;
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void EndPlay(const EEndPlayReason::Type InEndPlayReason) override;
+#pragma endregion
 
+#pragma region Debug
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Optimized Skeletal Mesh|Debug")
 	void RebuildInstances();
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Optimized Skeletal Mesh|Debug")
 	void ClearInstances();
+#pragma endregion
 
+#pragma region Settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Debug")
 	TObjectPtr<USkeletalMesh> SkeletalMesh = nullptr;
 
@@ -107,14 +112,19 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats")
 	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;
+#pragma endregion
 
 private:
+#pragma region Helpers
 	UOptimizedSkeletalMeshWorldSubsystem* GetOptimizedSubsystem() const;
-	FTransform GetInstanceTransform(int32 X, int32 Y) const;
+	FTransform GetInstanceTransform(int32 InX, int32 InY) const;
+#pragma endregion
 
+#pragma region RuntimeState
 	UPROPERTY(VisibleAnywhere, Category = "Optimized Skeletal Mesh|Debug")
 	TObjectPtr<UOptimizedSkeletalMeshRenderComponent> PreviewRenderComponent = nullptr;
 
 	UPROPERTY(Transient)
 	TArray<FOptimizedSkeletalMeshInstanceHandle> SpawnedHandles;
+#pragma endregion
 };

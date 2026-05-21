@@ -7,11 +7,11 @@
 
 namespace OptimizedSkeletalMesh::Debug
 {
-	static bool CanUseSpawnerWorld(const UWorld* World)
+	static bool CanUseSpawnerWorld(const UWorld* InWorld)
 	{
-		return World && (World->IsGameWorld() || World->WorldType == EWorldType::Editor);
+		return InWorld && (InWorld->IsGameWorld() || InWorld->WorldType == EWorldType::Editor);
 	}
-}
+} // namespace OptimizedSkeletalMesh::Debug
 
 AOptimizedSkeletalMeshDebugSpawner::AOptimizedSkeletalMeshDebugSpawner()
 {
@@ -25,20 +25,20 @@ AOptimizedSkeletalMeshDebugSpawner::AOptimizedSkeletalMeshDebugSpawner()
 	RootComponent = PreviewRenderComponent;
 }
 
-void AOptimizedSkeletalMeshDebugSpawner::OnConstruction(const FTransform& Transform)
+void AOptimizedSkeletalMeshDebugSpawner::OnConstruction(const FTransform& InTransform)
 {
-	Super::OnConstruction(Transform);
+	Super::OnConstruction(InTransform);
 
-	const UWorld* World = GetWorld();
-	if (bRebuildOnConstruction && World && World->WorldType == EWorldType::Editor)
+	const UWorld* world = GetWorld();
+	if (bRebuildOnConstruction && world && world->WorldType == EWorldType::Editor)
 	{
 		RebuildInstances();
 	}
 }
 
-void AOptimizedSkeletalMeshDebugSpawner::Tick(const float DeltaSeconds)
+void AOptimizedSkeletalMeshDebugSpawner::Tick(const float InDeltaSeconds)
 {
-	Super::Tick(DeltaSeconds);
+	Super::Tick(InDeltaSeconds);
 
 	if (PreviewRenderComponent)
 	{
@@ -46,9 +46,9 @@ void AOptimizedSkeletalMeshDebugSpawner::Tick(const float DeltaSeconds)
 		LastRenderStats = PreviewRenderComponent->GetLastRenderStats();
 	}
 
-	if (const UOptimizedSkeletalMeshWorldSubsystem* Subsystem = GetOptimizedSubsystem())
+	if (const UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetOptimizedSubsystem())
 	{
-		LastAnimationStats = Subsystem->GetLastAnimationStats();
+		LastAnimationStats = subsystem->GetLastAnimationStats();
 	}
 }
 
@@ -59,22 +59,22 @@ void AOptimizedSkeletalMeshDebugSpawner::BeginPlay()
 	RebuildInstances();
 }
 
-void AOptimizedSkeletalMeshDebugSpawner::EndPlay(const EEndPlayReason::Type EndPlayReason)
+void AOptimizedSkeletalMeshDebugSpawner::EndPlay(const EEndPlayReason::Type InEndPlayReason)
 {
 	ClearInstances();
 
-	Super::EndPlay(EndPlayReason);
+	Super::EndPlay(InEndPlayReason);
 }
 
 void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 {
-	UOptimizedSkeletalMeshWorldSubsystem* Subsystem = GetOptimizedSubsystem();
-	if (!Subsystem)
+	UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetOptimizedSubsystem();
+	if (!subsystem)
 	{
 		return;
 	}
 
-	Subsystem->SetExternalRenderBridgeActive(PreviewRenderComponent != nullptr);
+	subsystem->SetExternalRenderBridgeActive(PreviewRenderComponent != nullptr);
 
 	ClearInstances();
 
@@ -83,11 +83,11 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 		return;
 	}
 
-	Subsystem->SetExternalRenderBridgeActive(PreviewRenderComponent != nullptr);
+	subsystem->SetExternalRenderBridgeActive(PreviewRenderComponent != nullptr);
 
 	if (PreviewRenderComponent)
 	{
-		PreviewRenderComponent->SetOptimizedSkeletalMeshSubsystem(Subsystem);
+		PreviewRenderComponent->SetOptimizedSkeletalMeshSubsystem(subsystem);
 		PreviewRenderComponent->SetDrawDebugBounds(bDrawDebugBounds);
 		PreviewRenderComponent->SetDrawMeshSections(bDrawMeshSections);
 		PreviewRenderComponent->SetMeshDrawMode(MeshDrawMode);
@@ -102,32 +102,32 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 
 	SpawnedHandles.Reserve(CountX * CountY);
 
-	for (int32 Y = 0; Y < CountY; ++Y)
+	for (int32 y = 0; y < CountY; ++y)
 	{
-		for (int32 X = 0; X < CountX; ++X)
+		for (int32 x = 0; x < CountX; ++x)
 		{
-			FOptimizedSkeletalMeshInstanceDesc Desc;
-			Desc.SkeletalMesh = SkeletalMesh;
-			Desc.WorldTransform = GetInstanceTransform(X, Y);
-			Desc.LODIndex = ForcedLODIndex;
-			Desc.bAutoLOD = bAutoLOD;
-			Desc.Animation = Animation;
-			Desc.AnimationTime = AnimationStartTime;
-			Desc.AnimationPlayRate = AnimationPlayRate;
-			Desc.bLoopAnimation = bLoopAnimation;
-			Desc.bPlayAnimation = bPlayAnimation;
-			Desc.bVisible = true;
+			FOptimizedSkeletalMeshInstanceDesc desc;
+			desc.SkeletalMesh = SkeletalMesh;
+			desc.WorldTransform = GetInstanceTransform(x, y);
+			desc.LODIndex = ForcedLODIndex;
+			desc.bAutoLOD = bAutoLOD;
+			desc.Animation = Animation;
+			desc.AnimationTime = AnimationStartTime;
+			desc.AnimationPlayRate = AnimationPlayRate;
+			desc.bLoopAnimation = bLoopAnimation;
+			desc.bPlayAnimation = bPlayAnimation;
+			desc.bVisible = true;
 
-			const FOptimizedSkeletalMeshInstanceHandle Handle = Subsystem->RegisterInstance(Desc);
-			if (Handle.IsValid())
+			const FOptimizedSkeletalMeshInstanceHandle handle = subsystem->RegisterInstance(desc);
+			if (handle.IsValid())
 			{
-				SpawnedHandles.Add(Handle);
+				SpawnedHandles.Add(handle);
 			}
 		}
 	}
 
 	SpawnedInstanceCount = SpawnedHandles.Num();
-	VisibleRenderBatchCount = Subsystem->GetVisibleRenderBatchCount();
+	VisibleRenderBatchCount = subsystem->GetVisibleRenderBatchCount();
 
 	if (PreviewRenderComponent)
 	{
@@ -137,14 +137,14 @@ void AOptimizedSkeletalMeshDebugSpawner::RebuildInstances()
 
 void AOptimizedSkeletalMeshDebugSpawner::ClearInstances()
 {
-	if (UOptimizedSkeletalMeshWorldSubsystem* Subsystem = GetOptimizedSubsystem())
+	if (UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetOptimizedSubsystem())
 	{
 		const bool bUsePreviewRenderBridge = PreviewRenderComponent != nullptr;
-		Subsystem->SetExternalRenderBridgeActive(bUsePreviewRenderBridge);
+		subsystem->SetExternalRenderBridgeActive(bUsePreviewRenderBridge);
 
-		for (const FOptimizedSkeletalMeshInstanceHandle& Handle : SpawnedHandles)
+		for (const FOptimizedSkeletalMeshInstanceHandle& handle : SpawnedHandles)
 		{
-			Subsystem->UnregisterInstance(Handle);
+			subsystem->UnregisterInstance(handle);
 		}
 	}
 
@@ -162,27 +162,27 @@ void AOptimizedSkeletalMeshDebugSpawner::ClearInstances()
 
 UOptimizedSkeletalMeshWorldSubsystem* AOptimizedSkeletalMeshDebugSpawner::GetOptimizedSubsystem() const
 {
-	const UWorld* World = GetWorld();
-	return OptimizedSkeletalMesh::Debug::CanUseSpawnerWorld(World)
-		? World->GetSubsystem<UOptimizedSkeletalMeshWorldSubsystem>()
+	const UWorld* world = GetWorld();
+	return OptimizedSkeletalMesh::Debug::CanUseSpawnerWorld(world)
+		? world->GetSubsystem<UOptimizedSkeletalMeshWorldSubsystem>()
 		: nullptr;
 }
 
-FTransform AOptimizedSkeletalMeshDebugSpawner::GetInstanceTransform(const int32 X, const int32 Y) const
+FTransform AOptimizedSkeletalMeshDebugSpawner::GetInstanceTransform(const int32 InX, const int32 InY) const
 {
-	const FVector CenterOffset(
+	const FVector centerOffset(
 		(static_cast<float>(CountX - 1) * Spacing) * 0.5f,
 		(static_cast<float>(CountY - 1) * Spacing) * 0.5f,
 		0.0f);
 
-	const FVector LocalOffset(
-		static_cast<float>(X) * Spacing,
-		static_cast<float>(Y) * Spacing,
+	const FVector localOffset(
+		static_cast<float>(InX) * Spacing,
+		static_cast<float>(InY) * Spacing,
 		0.0f);
 
-	const FTransform ActorTransform = GetActorTransform();
-	FTransform InstanceTransform = ActorTransform;
-	InstanceTransform.SetLocation(ActorTransform.TransformPosition(LocalOffset - CenterOffset));
+	const FTransform actorTransform = GetActorTransform();
+	FTransform instanceTransform = actorTransform;
+	instanceTransform.SetLocation(actorTransform.TransformPosition(localOffset - centerOffset));
 
-	return InstanceTransform;
+	return instanceTransform;
 }

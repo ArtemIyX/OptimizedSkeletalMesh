@@ -136,44 +136,44 @@ class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshWorldSubsystem : public UT
 	GENERATED_BODY()
 
 public:
-	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Initialize(FSubsystemCollectionBase& InCollection) override;
 	virtual void Deinitialize() override;
-	virtual void Tick(float DeltaTime) override;
+	virtual void Tick(float InDeltaTime) override;
 	virtual TStatId GetStatId() const override;
 	virtual bool IsTickable() const override;
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	FOptimizedSkeletalMeshInstanceHandle RegisterInstance(const FOptimizedSkeletalMeshInstanceDesc& Desc);
+	FOptimizedSkeletalMeshInstanceHandle RegisterInstance(const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	bool UnregisterInstance(FOptimizedSkeletalMeshInstanceHandle Handle);
+	bool UnregisterInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	bool UpdateInstance(FOptimizedSkeletalMeshInstanceHandle Handle, const FOptimizedSkeletalMeshInstanceDesc& Desc);
+	bool UpdateInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	bool UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle Handle, const FTransform& WorldTransform);
+	bool UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle InHandle, const FTransform& InWorldTransform);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	bool UpdateInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle Handle, float AnimationTime);
+	bool UpdateInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationTime);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	bool SetInstanceAnimationPlaying(FOptimizedSkeletalMeshInstanceHandle Handle, bool bPlaying);
+	bool SetInstanceAnimationPlaying(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInPlaying);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	bool SetInstanceVisible(FOptimizedSkeletalMeshInstanceHandle Handle, bool bVisible);
+	bool SetInstanceVisible(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInVisible);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	bool ShowInstance(FOptimizedSkeletalMeshInstanceHandle Handle);
+	bool ShowInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	bool HideInstance(FOptimizedSkeletalMeshInstanceHandle Handle);
+	bool HideInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
-	int32 SetInstancesVisible(const TArray<FOptimizedSkeletalMeshInstanceHandle>& Handles, bool bVisible);
+	int32 SetInstancesVisible(const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles, bool bInVisible);
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
-	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle Handle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
+	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	void GetInstancesSnapshot(TArray<FOptimizedSkeletalMeshInstanceSnapshot>& OutInstances) const;
@@ -187,7 +187,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	FOptimizedSkeletalMeshAnimationStats GetLastAnimationStats() const;
 
-	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle Handle) const;
+	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle InHandle) const;
 	void GetBonePaletteSnapshots(TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& OutSnapshots) const;
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Animation")
@@ -206,16 +206,25 @@ public:
 	}
 
 private:
+#pragma region Rendering
 	void EnsureRenderBridge();
 	void DestroyRenderBridge();
-	int32 AllocateInstanceId();
-	bool IsValidInstanceId(int32 InstanceId) const;
-	void MarkRenderDataDirty();
-	void TickAnimation(float DeltaTime);
-	FOptimizedSkeletalMeshAnimationMeshCache* FindOrBuildAnimationMeshCache(USkeletalMesh* SkeletalMesh);
-	bool EvaluateInstanceBonePalette(const FOptimizedSkeletalMeshInstanceDesc& Desc, TArray<FMatrix44f>& OutBonePalette);
-	static float WrapAnimationTime(float AnimationTime, float SequenceLength);
+#pragma endregion
 
+#pragma region Instances
+	int32 AllocateInstanceId();
+	bool IsValidInstanceId(int32 InInstanceId) const;
+	void MarkRenderDataDirty();
+#pragma endregion
+
+#pragma region Animation
+	void TickAnimation(float InDeltaTime);
+	FOptimizedSkeletalMeshAnimationMeshCache* FindOrBuildAnimationMeshCache(USkeletalMesh* InSkeletalMesh);
+	bool EvaluateInstanceBonePalette(const FOptimizedSkeletalMeshInstanceDesc& InDesc, TArray<FMatrix44f>& OutBonePalette);
+	static float WrapAnimationTime(float InAnimationTime, float InSequenceLength);
+#pragma endregion
+
+#pragma region State
 	UPROPERTY(Transient)
 	TMap<int32, FOptimizedSkeletalMeshInstanceDesc> Instances;
 
@@ -235,4 +244,5 @@ private:
 	bool bRenderDataDirty = false;
 	bool bExternalRenderBridgeActive = false;
 	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;
+#pragma endregion
 };
