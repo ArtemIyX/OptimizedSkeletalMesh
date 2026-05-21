@@ -192,6 +192,77 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UnregisterInstance(FOptimizedSkeletal
 	return true;
 }
 
+FOptimizedSkeletalMeshInstanceHandle UOptimizedSkeletalMeshWorldSubsystem::AddInstance(
+	const FOptimizedSkeletalMeshInstanceDesc& InDesc)
+{
+	return RegisterInstance(InDesc);
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::AddInstancesBatch(
+	const FOptimizedSkeletalMeshInstanceDesc& InBaseDesc,
+	const TArray<FTransform>& InWorldTransforms,
+	TArray<FOptimizedSkeletalMeshInstanceHandle>& OutHandles)
+{
+	OutHandles.Reset();
+	OutHandles.Reserve(InWorldTransforms.Num());
+
+	if (!InBaseDesc.SkeletalMesh)
+	{
+		return;
+	}
+
+	for (const FTransform& worldTransform : InWorldTransforms)
+	{
+		FOptimizedSkeletalMeshInstanceDesc desc = InBaseDesc;
+		desc.WorldTransform = worldTransform;
+
+		const FOptimizedSkeletalMeshInstanceHandle handle = RegisterInstance(desc);
+		if (handle.IsValid())
+		{
+			OutHandles.Add(handle);
+		}
+	}
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::RemoveInstance(const FOptimizedSkeletalMeshInstanceHandle InHandle)
+{
+	return UnregisterInstance(InHandle);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::RemoveInstanceById(const int32 InInstanceId)
+{
+	return UnregisterInstance(FOptimizedSkeletalMeshInstanceHandle(InInstanceId));
+}
+
+int32 UOptimizedSkeletalMeshWorldSubsystem::RemoveInstances(
+	const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles)
+{
+	int32 removedCount = 0;
+	for (const FOptimizedSkeletalMeshInstanceHandle& handle : InHandles)
+	{
+		if (UnregisterInstance(handle))
+		{
+			++removedCount;
+		}
+	}
+
+	return removedCount;
+}
+
+int32 UOptimizedSkeletalMeshWorldSubsystem::RemoveInstancesById(const TArray<int32>& InInstanceIds)
+{
+	int32 removedCount = 0;
+	for (const int32 instanceId : InInstanceIds)
+	{
+		if (UnregisterInstance(FOptimizedSkeletalMeshInstanceHandle(instanceId)))
+		{
+			++removedCount;
+		}
+	}
+
+	return removedCount;
+}
+
 bool UOptimizedSkeletalMeshWorldSubsystem::UpdateInstance(
 	FOptimizedSkeletalMeshInstanceHandle InHandle,
 	const FOptimizedSkeletalMeshInstanceDesc& InDesc)

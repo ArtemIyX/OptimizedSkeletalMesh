@@ -188,6 +188,27 @@ public:
 	bool UnregisterInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	FOptimizedSkeletalMeshInstanceHandle AddInstance(const FOptimizedSkeletalMeshInstanceDesc& InDesc);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	void AddInstancesBatch(
+		const FOptimizedSkeletalMeshInstanceDesc& InBaseDesc,
+		const TArray<FTransform>& InWorldTransforms,
+		TArray<FOptimizedSkeletalMeshInstanceHandle>& OutHandles);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool RemoveInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool RemoveInstanceById(int32 InInstanceId);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	int32 RemoveInstances(const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	int32 RemoveInstancesById(const TArray<int32>& InInstanceIds);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool UpdateInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
