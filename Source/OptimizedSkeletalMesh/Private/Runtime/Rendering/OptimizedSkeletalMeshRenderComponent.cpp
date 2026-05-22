@@ -1139,12 +1139,19 @@ public:
 					&& (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DirectMeshInstanced
 						|| MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced))
 				{
+					const bool bCollectShadows = bCastShadows && !bIsWireframeView;
 					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> visibleInstancesByLod;
 					visibleInstancesByLod.SetNum(batch.lodResources.Num());
 					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> shadowVisibleInstancesByLod;
-					shadowVisibleInstancesByLod.SetNum(batch.lodResources.Num());
+					if (bCollectShadows)
+					{
+						shadowVisibleInstancesByLod.SetNum(batch.lodResources.Num());
+					}
 					TArray<OptimizedSkeletalMesh::FShadowCandidate> shadowCandidates;
-					shadowCandidates.Reserve(batch.InInstances.Num());
+					if (bCollectShadows)
+					{
+						shadowCandidates.Reserve(batch.InInstances.Num());
+					}
 					for (OptimizedSkeletalMesh::FVisibleLODInstances& lodInstances : visibleInstancesByLod)
 					{
 						lodInstances.InInstances.Reserve(batch.InInstances.Num());
@@ -1208,7 +1215,8 @@ public:
 						{
 							++frameStats.LocalShadowRejectedByOptOut;
 						}
-						const bool bInstanceShadowVisible = bPassesLocalLightInstanceGate
+						const bool bInstanceShadowVisible = bCollectShadows
+							&& bPassesLocalLightInstanceGate
 							&& OptimizedSkeletalMesh::ShouldCastShadowForInstance(
 							instance,
 							distanceSquared,
@@ -1274,7 +1282,7 @@ public:
 						}
 					}
 
-					if (shadowCandidates.Num() > 1)
+					if (bCollectShadows && shadowCandidates.Num() > 1)
 					{
 						shadowCandidates.Sort(
 							[](const OptimizedSkeletalMesh::FShadowCandidate& InLeft, const OptimizedSkeletalMesh::FShadowCandidate& InRight) {
@@ -1351,7 +1359,7 @@ public:
 						}
 
 						const bool bSubmitShadowOnlyMesh =
-							!bIsWireframeView && bCastShadows && !shadowVisibleInstances.IsEmpty();
+							bCollectShadows && !shadowVisibleInstances.IsEmpty();
 						const int32 maxShadowSectionsPerLod = bIsLocalLightShadowView
 							? LocalLightMaxShadowSectionsPerLOD
 							: MaxShadowSectionsPerLOD;
