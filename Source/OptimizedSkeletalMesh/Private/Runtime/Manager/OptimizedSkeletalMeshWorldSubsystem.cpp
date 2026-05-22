@@ -12,7 +12,10 @@
 #include "HAL/ThreadSafeCounter.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
+#include "Engine/SkeletalMesh.h"
+#include "DrawDebugHelpers.h"
 #include "GameFramework/Actor.h"
+#include "Rendering/SkeletalMeshRenderData.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderBridgeActor.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 #include "Runtime/Settings/OptimizedSkeletalMeshSettings.h"
@@ -417,6 +420,31 @@ namespace OptimizedSkeletalMesh
 		TEXT("<= 0 means advance time every frame without CPU pose eval."),
 		ECVF_Default);
 
+	static bool bDebugEntitiesEnabled = false;
+	static float DebugEntitiesRadius = 5000.0f;
+	static int32 DebugEntitiesMaxCount = 64;
+
+	static FAutoConsoleCommand DebugEntitiesShowCommand(
+		TEXT("osm.DebugEntities.Show"),
+		TEXT("Show per-instance OSM debug text in world near camera."),
+		FConsoleCommandDelegate::CreateLambda([]() {
+			bDebugEntitiesEnabled = true;
+		}));
+
+	static FAutoConsoleCommand DebugEntitiesHideCommand(
+		TEXT("osm.DebugEntities.Hide"),
+		TEXT("Hide per-instance OSM debug text in world."),
+		FConsoleCommandDelegate::CreateLambda([]() {
+			bDebugEntitiesEnabled = false;
+		}));
+
+	static FAutoConsoleCommand DebugEntitiesToggleCommand(
+		TEXT("osm.DebugEntities.Toggle"),
+		TEXT("Toggle per-instance OSM debug text in world."),
+		FConsoleCommandDelegate::CreateLambda([]() {
+			bDebugEntitiesEnabled = !bDebugEntitiesEnabled;
+		}));
+
 	static FOptimizedSkeletalMeshRenderSettings NormalizeRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
 	{
 		FOptimizedSkeletalMeshRenderSettings normalizedSettings = InSettings;
@@ -672,6 +700,8 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 
 		ClearRenderDataDirty();
 	}
+
+	DrawInstanceDebugOverlay();
 }
 
 TStatId UOptimizedSkeletalMeshWorldSubsystem::GetStatId() const
@@ -2062,4 +2092,174 @@ float UOptimizedSkeletalMeshWorldSubsystem::WrapAnimationTime(
 	}
 
 	return wrappedTime;
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::DrawInstanceDebugOverlay() const
+{
+	if (!OptimizedSkeletalMesh::bDebugEntitiesEnabled)
+	{
+		return;
+	}
+
+	UWorld* world = GetWorld();
+	if (!world || !world->IsGameWorld())
+	{
+		return;
+	}
+
+	FVector cameraLocation = FVector::ZeroVector;
+	FRotator cameraRotation = FRotator::ZeroRotator;
+	bool bHasCamera = false;
+	for (FConstPlayerControllerIterator controllerIterator = world->GetPlayerControllerIterator(); controllerIterator; ++controllerIterator)
+	{
+		const APlayerController* playerController = controllerIterator->Get();
+		if (!playerController)
+		{
+			continue;
+		}
+
+		playerController->GetPlayerViewPoint(cameraLocation, cameraRotation);
+		bHasCamera = true;
+		break;
+	}
+
+	if (!bHasCamera)
+	{
+		return;
+	}
+
+	const float radius = FMath::Max(100.0f, OptimizedSkeletalMesh::DebugEntitiesRadius);
+	const float radiusSquared = radius * radius;
+	const int32 maxCount = FMath::Max(1, OptimizedSkeletalMesh::DebugEntitiesMaxCount);
+
+	struct FDebugEntry
+	{
+		int32 instanceId = INDEX_NONE;
+		int32 batchIndex = INDEX_NONE;
+		int32 lodIndex = 0;
+		float distance = 0.0f;
+		FVector worldLocation = FVector::ZeroVector;
+		const FOptimizedSkeletalMeshInstanceDesc* desc = nullptr;
+	};
+
+	TArray<FDebugEntry> entries;
+	entries.Reserve(Instances.Num());
+
+	TMap<USkeletalMesh*, int32> batchByMesh;
+	int32 nextBatchIndex = 0;
+
+	for (const TPair<int32, FOptimizedSkeletalMeshInstanceDesc>& pair : Instances)
+	{
+		const FOptimizedSkeletalMeshInstanceDesc& desc = pair.Value;
+		if (!desc.SkeletalMesh || !desc.bVisible)
+		{
+			continue;
+		}
+
+		const FVector worldLocation = desc.WorldTransform.GetLocation();
+		const float distanceSquared = FVector::DistSquared(worldLocation, cameraLocation);
+		if (distanceSquared > radiusSquared)
+		{
+			continue;
+		}
+
+		int32 batchIndex = INDEX_NONE;
+		if (int32* existingBatchIndex = batchByMesh.Find(desc.SkeletalMesh.Get()))
+		{
+			batchIndex = *existingBatchIndex;
+		}
+		else
+		{
+			batchIndex = nextBatchIndex++;
+			batchByMesh.Add(desc.SkeletalMesh.Get(), batchIndex);
+		}
+
+		int32 lodIndex = FMath::Max(0, desc.LODIndex);
+		if (desc.bAutoLOD)
+		{
+			lodIndex = 0;
+			if (const FSkeletalMeshRenderData* renderData = desc.SkeletalMesh->GetResourceForRendering())
+			{
+				const int32 lodCount = renderData->LODRenderData.Num();
+				if (lodCount > 1)
+				{
+					const FBoxSphereBounds bounds(desc.SkeletalMesh->GetBounds().TransformBy(desc.WorldTransform));
+					const FVector cameraForward = cameraRotation.Vector();
+					const FVector toCenter = bounds.Origin - cameraLocation;
+					const float projectedDistance = FMath::Max(FVector::DotProduct(toCenter, cameraForward), 1.0f);
+					const float screenRadius = bounds.SphereRadius / projectedDistance;
+					float screenSize = screenRadius * 2.0f;
+
+					for (int32 candidateLod = 1; candidateLod < lodCount; ++candidateLod)
+					{
+						if (const FSkeletalMeshLODInfo* lodInfo = desc.SkeletalMesh->GetLODInfo(candidateLod))
+						{
+							if (screenSize <= lodInfo->ScreenSize.Default)
+							{
+								lodIndex = candidateLod;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		FDebugEntry& entry = entries.AddDefaulted_GetRef();
+		entry.instanceId = pair.Key;
+		entry.batchIndex = batchIndex;
+		entry.lodIndex = lodIndex;
+		entry.distance = FMath::Sqrt(distanceSquared);
+		entry.worldLocation = worldLocation;
+		entry.desc = &desc;
+	}
+
+	entries.Sort([](const FDebugEntry& InA, const FDebugEntry& InB) {
+		return InA.distance < InB.distance;
+	});
+
+	if (entries.Num() > maxCount)
+	{
+		entries.SetNum(maxCount, EAllowShrinking::No);
+	}
+
+	for (const FDebugEntry& entry : entries)
+	{
+		if (!entry.desc)
+		{
+			continue;
+		}
+
+		const FString line = FString::Printf(
+			TEXT("id:%d b:%d lod:%d dist:%.0f\nmesh:%s\nanim:%s t:%.2f play:%d loop:%d"),
+			entry.instanceId,
+			entry.batchIndex,
+			entry.lodIndex,
+			entry.distance,
+			*GetNameSafe(entry.desc->SkeletalMesh),
+			*GetNameSafe(entry.desc->Animation),
+			entry.desc->AnimationTime,
+			entry.desc->bPlayAnimation ? 1 : 0,
+			entry.desc->bLoopAnimation ? 1 : 0);
+
+		static const FColor lodColors[] = {
+			FColor(255, 255, 255),
+			FColor(120, 220, 120),
+			FColor(120, 180, 255),
+			FColor(255, 220, 120),
+			FColor(255, 160, 120),
+			FColor(220, 120, 255),
+			FColor(200, 200, 120),
+			FColor(180, 180, 180)};
+		const int32 colorIndex = FMath::Clamp(entry.lodIndex, 0, static_cast<int32>(UE_ARRAY_COUNT(lodColors)) - 1);
+		const FColor textColor = lodColors[colorIndex];
+
+		DrawDebugString(
+			world,
+			entry.worldLocation + FVector(0.0f, 0.0f, 120.0f),
+			line,
+			nullptr,
+			textColor,
+			0.0f,
+			true);
+	}
 }

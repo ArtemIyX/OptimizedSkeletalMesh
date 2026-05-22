@@ -417,6 +417,10 @@ private:
 	static float WrapAnimationTime(float InAnimationTime, float InSequenceLength);
 #pragma endregion
 
+#pragma region Debug
+	void DrawInstanceDebugOverlay() const;
+#pragma endregion
+
 #pragma region State
 	UPROPERTY(Transient)
 	TMap<int32, FOptimizedSkeletalMeshInstanceDesc> Instances;
