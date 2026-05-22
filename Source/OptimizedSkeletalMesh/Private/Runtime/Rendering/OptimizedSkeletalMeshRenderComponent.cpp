@@ -1125,6 +1125,7 @@ public:
 			const bool bIsShadowDepthView = InViews[viewIndex]->GetDynamicMeshElementsShadowCullFrustum() != nullptr;
 			const bool bIsLocalLightShadowView = bIsShadowDepthView && InViews[viewIndex]->IsPerspectiveProjection();
 			const float nearShadowDistanceSquared = NearFullShadowDistance > 0.0f ? FMath::Square(NearFullShadowDistance) : -1.0f;
+			const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
 			FPrimitiveDrawInterface* pdi = InCollector.GetPDI(viewIndex);
 			int32 drawnMeshInstances = 0;
 			const int32 shadowBudgetLimit = bIsLocalLightShadowView
@@ -1194,7 +1195,6 @@ public:
 						}
 
 						++frameStats.VisibleInstances;
-						const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
 						const float distanceSquared = FVector::DistSquared(viewOrigin, instance.worldBounds.GetCenter());
 						const float effectiveMaxShadowCastDistance = bIsLocalLightShadowView
 							? LocalLightMaxShadowCastDistance
@@ -1665,7 +1665,6 @@ public:
 						instance,
 						batch.lodResources.Num());
 					++frameStats.VisibleInstances;
-					const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
 					const float distanceSquared = FVector::DistSquared(viewOrigin, instance.worldBounds.GetCenter());
 					const float effectiveMaxShadowCastDistance = bIsLocalLightShadowView
 						? LocalLightMaxShadowCastDistance
