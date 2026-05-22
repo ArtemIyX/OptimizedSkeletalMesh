@@ -387,6 +387,14 @@ namespace OptimizedSkeletalMesh
 		TArray<const FRenderInstance*> InInstances;
 	};
 
+	struct FShadowCandidate
+	{
+		const FRenderInstance* Instance = nullptr;
+		int32 LodIndex = INDEX_NONE;
+		float DistanceSquared = TNumericLimits<float>::Max();
+		bool bNearGuaranteed = false;
+	};
+
 	static FRHIShaderResourceView* UploadUInt32DynamicBuffer(
 		FMeshElementCollector& InCollector,
 		TConstArrayView<uint32> InValues)
@@ -1017,6 +1025,7 @@ public:
 					visibleInstancesByLod.SetNum(batch.lodResources.Num());
 					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> shadowVisibleInstancesByLod;
 					shadowVisibleInstancesByLod.SetNum(batch.lodResources.Num());
+					TArray<OptimizedSkeletalMesh::FShadowCandidate> shadowCandidates;
 
 					for (const OptimizedSkeletalMesh::FRenderInstance& instance : batch.InInstances)
 					{
@@ -1059,18 +1068,16 @@ public:
 						}
 
 						++frameStats.VisibleInstances;
+						const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
+						const float distanceSquared = FVector::DistSquared(viewOrigin, instance.worldBounds.GetCenter());
+						const bool bNearGuaranteed = NearFullShadowDistance > 0.0f
+							&& distanceSquared <= FMath::Square(NearFullShadowDistance);
 						const bool bInstanceShadowVisible = OptimizedSkeletalMesh::ShouldCastShadowForInstance(
 							*InViews[viewIndex],
 							instance,
 							bCastShadows,
 							NearFullShadowDistance,
 							MaxShadowCastDistance);
-						const bool bInstanceShadowSelected = bInstanceShadowVisible && remainingShadowBudget > 0;
-						if (bInstanceShadowSelected)
-						{
-							--remainingShadowBudget;
-							++frameStats.ShadowVisibleInstances;
-						}
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
 						{
 							frameStats.RenderVisibleInstanceIds.AddUnique(instance.InstanceId);
@@ -1087,9 +1094,13 @@ public:
 						}
 
 						visibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
-						if (bInstanceShadowSelected)
+						if (bInstanceShadowVisible)
 						{
-							shadowVisibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
+							OptimizedSkeletalMesh::FShadowCandidate& candidate = shadowCandidates.AddDefaulted_GetRef();
+							candidate.Instance = &instance;
+							candidate.LodIndex = chosenLodIndex;
+							candidate.DistanceSquared = distanceSquared;
+							candidate.bNearGuaranteed = bNearGuaranteed;
 						}
 						++drawnMeshInstances;
 						++frameStats.DrawnInstances;
@@ -1105,6 +1116,34 @@ public:
 								? lodResources->debugColor
 								: OptimizedSkeletalMesh::GetBatchDebugColor(chosenLodIndex);
 							DrawWireBox(pdi, instance.worldBounds, debugColor, SDPG_Foreground);
+						}
+					}
+
+					shadowCandidates.Sort(
+						[](const OptimizedSkeletalMesh::FShadowCandidate& InLeft, const OptimizedSkeletalMesh::FShadowCandidate& InRight) {
+							if (InLeft.bNearGuaranteed != InRight.bNearGuaranteed)
+							{
+								return InLeft.bNearGuaranteed && !InRight.bNearGuaranteed;
+							}
+
+							return InLeft.DistanceSquared < InRight.DistanceSquared;
+						});
+
+					for (const OptimizedSkeletalMesh::FShadowCandidate& candidate : shadowCandidates)
+					{
+						if (!candidate.Instance || !shadowVisibleInstancesByLod.IsValidIndex(candidate.LodIndex))
+						{
+							continue;
+						}
+
+						if (candidate.bNearGuaranteed || remainingShadowBudget > 0)
+						{
+							shadowVisibleInstancesByLod[candidate.LodIndex].InInstances.Add(candidate.Instance);
+							++frameStats.ShadowVisibleInstances;
+							if (!candidate.bNearGuaranteed && remainingShadowBudget > 0)
+							{
+								--remainingShadowBudget;
+							}
 						}
 					}
 
@@ -1446,16 +1485,24 @@ public:
 						instance,
 						batch.lodResources.Num());
 					++frameStats.VisibleInstances;
+					const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
+					const float distanceSquared = FVector::DistSquared(viewOrigin, instance.worldBounds.GetCenter());
+					const bool bNearGuaranteed = NearFullShadowDistance > 0.0f
+						&& distanceSquared <= FMath::Square(NearFullShadowDistance);
 					const bool bInstanceShadowVisible = OptimizedSkeletalMesh::ShouldCastShadowForInstance(
 						*InViews[viewIndex],
 						instance,
 						bCastShadows,
 						NearFullShadowDistance,
 						MaxShadowCastDistance);
-					const bool bInstanceShadowSelected = bInstanceShadowVisible && remainingShadowBudget > 0;
+					const bool bInstanceShadowSelected = bInstanceShadowVisible
+						&& (bNearGuaranteed || remainingShadowBudget > 0);
 					if (bInstanceShadowSelected)
 					{
-						--remainingShadowBudget;
+						if (!bNearGuaranteed && remainingShadowBudget > 0)
+						{
+							--remainingShadowBudget;
+						}
 						++frameStats.ShadowVisibleInstances;
 					}
 					const OptimizedSkeletalMesh::FLODResources* lodResources =
