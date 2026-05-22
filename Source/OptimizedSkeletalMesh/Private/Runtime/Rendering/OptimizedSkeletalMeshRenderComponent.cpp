@@ -1127,6 +1127,7 @@ public:
 			const bool bIsLODColorationView = InViewFamily.EngineShowFlags.LODColoration;
 			const bool bIsShadowDepthView = InViews[viewIndex]->GetDynamicMeshElementsShadowCullFrustum() != nullptr;
 			const bool bIsLocalLightShadowView = bIsShadowDepthView && InViews[viewIndex]->IsPerspectiveProjection();
+			const float nearShadowDistanceSquared = NearFullShadowDistance > 0.0f ? FMath::Square(NearFullShadowDistance) : -1.0f;
 			FPrimitiveDrawInterface* pdi = InCollector.GetPDI(viewIndex);
 			int32 drawnMeshInstances = 0;
 			const int32 shadowBudgetLimit = bIsLocalLightShadowView
@@ -1194,7 +1195,7 @@ public:
 							: MaxShadowCastDistance;
 						OptimizedSkeletalMesh::EShadowTier shadowTier = OptimizedSkeletalMesh::EShadowTier::Far;
 						const bool bNearGuaranteed = NearFullShadowDistance > 0.0f
-							&& distanceSquared <= FMath::Square(NearFullShadowDistance);
+							&& distanceSquared <= nearShadowDistanceSquared;
 						const bool bPassesLocalLightInstanceGate =
 							!bIsLocalLightShadowView || instance.bCastLocalLightShadows;
 						if (bIsLocalLightShadowView && !bPassesLocalLightInstanceGate)
@@ -1665,7 +1666,7 @@ public:
 						: MaxShadowCastDistance;
 					OptimizedSkeletalMesh::EShadowTier shadowTier = OptimizedSkeletalMesh::EShadowTier::Far;
 					const bool bNearGuaranteed = NearFullShadowDistance > 0.0f
-						&& distanceSquared <= FMath::Square(NearFullShadowDistance);
+						&& distanceSquared <= nearShadowDistanceSquared;
 					const bool bPassesLocalLightInstanceGate =
 						!bIsLocalLightShadowView || instance.bCastLocalLightShadows;
 					if (bIsLocalLightShadowView && !bPassesLocalLightInstanceGate)
