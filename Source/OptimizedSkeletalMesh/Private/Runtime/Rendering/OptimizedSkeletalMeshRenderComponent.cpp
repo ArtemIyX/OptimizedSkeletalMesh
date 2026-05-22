@@ -32,19 +32,24 @@
 #include "Stats/Stats.h"
 #include "Logging/LogMacros.h"
 
-DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Rendering"), STATGROUP_OSMRendering, STATCAT_Advanced);
+DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Meshes"), STATGROUP_OSMMeshes, STATCAT_Advanced);
+DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Shadows"), STATGROUP_OSMShadows, STATCAT_Advanced);
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Visible LOD"), STATGROUP_OSMVisibleLOD, STATCAT_Advanced);
 DECLARE_STATS_GROUP_SORTBYNAME(TEXT("OSM Skinning"), STATGROUP_OSMSkinning, STATCAT_Advanced);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Registered InInstances"), STAT_OptimizedSkeletalMeshRegisteredInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Tested Instances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Visible Instances"), STAT_OptimizedSkeletalMeshVisibleInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Shadow Visible Instances"), STAT_OptimizedSkeletalMeshShadowVisibleInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Culled Instances"), STAT_OptimizedSkeletalMeshCulledInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Drawn Instances"), STAT_OptimizedSkeletalMeshDrawnInstances, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Draw Calls"), STAT_OptimizedSkeletalMeshSubmittedDrawCalls, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Sections"), STAT_OptimizedSkeletalMeshSubmittedSections, STATGROUP_OSMRendering);
-DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Triangles"), STAT_OptimizedSkeletalMeshSubmittedTriangles, STATGROUP_OSMRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Registered InInstances"), STAT_OptimizedSkeletalMeshRegisteredInstances, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Tested Instances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Visible Instances"), STAT_OptimizedSkeletalMeshVisibleInstances, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Culled Instances"), STAT_OptimizedSkeletalMeshCulledInstances, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Drawn Instances"), STAT_OptimizedSkeletalMeshDrawnInstances, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Draw Calls"), STAT_OptimizedSkeletalMeshSubmittedDrawCalls, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Sections"), STAT_OptimizedSkeletalMeshSubmittedSections, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Triangles"), STAT_OptimizedSkeletalMeshSubmittedTriangles, STATGROUP_OSMMeshes);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Shadow Visible Instances"), STAT_OptimizedSkeletalMeshShadowVisibleInstances, STATGROUP_OSMShadows);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Local Shadow Candidates"), STAT_OptimizedSkeletalMeshLocalShadowCandidates, STATGROUP_OSMShadows);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Local Shadow Visible"), STAT_OptimizedSkeletalMeshLocalShadowVisibleInstances, STATGROUP_OSMShadows);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Local Shadow Rejected OptOut"), STAT_OptimizedSkeletalMeshLocalShadowRejectedByOptOut, STATGROUP_OSMShadows);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Local Shadow Rejected Budget"), STAT_OptimizedSkeletalMeshLocalShadowRejectedByBudget, STATGROUP_OSMShadows);
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD0"), STAT_OptimizedSkeletalMeshVisibleLOD0, STATGROUP_OSMVisibleLOD);
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD1"), STAT_OptimizedSkeletalMeshVisibleLOD1, STATGROUP_OSMVisibleLOD);
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD2"), STAT_OptimizedSkeletalMeshVisibleLOD2, STATGROUP_OSMVisibleLOD);
@@ -1192,6 +1197,10 @@ public:
 							&& distanceSquared <= FMath::Square(NearFullShadowDistance);
 						const bool bPassesLocalLightInstanceGate =
 							!bIsLocalLightShadowView || instance.bCastLocalLightShadows;
+						if (bIsLocalLightShadowView && !bPassesLocalLightInstanceGate)
+						{
+							++frameStats.LocalShadowRejectedByOptOut;
+						}
 						const bool bInstanceShadowVisible = bPassesLocalLightInstanceGate
 							&& OptimizedSkeletalMesh::ShouldCastShadowForInstance(
 							instance,
@@ -1223,6 +1232,10 @@ public:
 						visibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
 						if (bInstanceShadowVisible)
 						{
+							if (bIsLocalLightShadowView)
+							{
+								++frameStats.LocalShadowCandidates;
+							}
 							const int32 shadowLodIndex = OptimizedSkeletalMesh::ChooseShadowCasterLOD(
 								chosenLodIndex,
 								batch.lodResources.Num(),
@@ -1280,10 +1293,18 @@ public:
 						{
 							shadowVisibleInstancesByLod[candidate.LodIndex].InInstances.Add(candidate.Instance);
 							++frameStats.ShadowVisibleInstances;
+							if (bIsLocalLightShadowView)
+							{
+								++frameStats.LocalShadowVisibleInstances;
+							}
 							if (!candidate.bNearGuaranteed && remainingShadowBudget > 0)
 							{
 								--remainingShadowBudget;
 							}
+						}
+						else if (bIsLocalLightShadowView)
+						{
+							++frameStats.LocalShadowRejectedByBudget;
 						}
 					}
 
@@ -1647,6 +1668,10 @@ public:
 						&& distanceSquared <= FMath::Square(NearFullShadowDistance);
 					const bool bPassesLocalLightInstanceGate =
 						!bIsLocalLightShadowView || instance.bCastLocalLightShadows;
+					if (bIsLocalLightShadowView && !bPassesLocalLightInstanceGate)
+					{
+						++frameStats.LocalShadowRejectedByOptOut;
+					}
 					const bool bInstanceShadowVisible = bPassesLocalLightInstanceGate
 						&& OptimizedSkeletalMesh::ShouldCastShadowForInstance(
 						instance,
@@ -1664,11 +1689,20 @@ public:
 						&& (bNearGuaranteed || remainingShadowBudget > 0);
 					if (bInstanceShadowSelected)
 					{
+						if (bIsLocalLightShadowView)
+						{
+							++frameStats.LocalShadowCandidates;
+							++frameStats.LocalShadowVisibleInstances;
+						}
 						if (!bNearGuaranteed && remainingShadowBudget > 0)
 						{
 							--remainingShadowBudget;
 						}
 						++frameStats.ShadowVisibleInstances;
+					}
+					else if (bIsLocalLightShadowView && bInstanceShadowVisible)
+					{
+						++frameStats.LocalShadowRejectedByBudget;
 					}
 					const OptimizedSkeletalMesh::FLODResources* lodResources =
 						batch.lodResources.IsValidIndex(chosenLodIndex)
@@ -2228,6 +2262,10 @@ void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshTestedInstances, InStats.TestedInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleInstances, InStats.VisibleInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshShadowVisibleInstances, InStats.ShadowVisibleInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshLocalShadowCandidates, InStats.LocalShadowCandidates);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshLocalShadowVisibleInstances, InStats.LocalShadowVisibleInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshLocalShadowRejectedByOptOut, InStats.LocalShadowRejectedByOptOut);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshLocalShadowRejectedByBudget, InStats.LocalShadowRejectedByBudget);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshCulledInstances, InStats.CulledInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshDrawnInstances, InStats.DrawnInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSubmittedDrawCalls, InStats.SubmittedDrawCalls);
