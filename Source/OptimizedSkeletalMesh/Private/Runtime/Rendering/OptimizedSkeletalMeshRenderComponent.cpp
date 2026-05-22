@@ -837,6 +837,25 @@ namespace OptimizedSkeletalMesh
 		return FMath::Clamp(chosenLOD, 0, InNumLODs - 1);
 	}
 
+	static int32 ChooseShadowCasterLOD(
+		const int32 InColorLodIndex,
+		const int32 InNumLODs,
+		const EShadowTier InShadowTier)
+	{
+		if (InNumLODs <= 1)
+		{
+			return 0;
+		}
+
+		const int32 clampedColorLod = FMath::Clamp(InColorLodIndex, 0, InNumLODs - 1);
+		if (InShadowTier == EShadowTier::Mid)
+		{
+			return FMath::Min(clampedColorLod + 1, InNumLODs - 1);
+		}
+
+		return clampedColorLod;
+	}
+
 	static uint32 GetStableShadowHash(const int32 InInstanceId)
 	{
 		return GetTypeHash(InInstanceId);
@@ -1227,9 +1246,13 @@ public:
 						visibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
 						if (bInstanceShadowVisible)
 						{
+							const int32 shadowLodIndex = OptimizedSkeletalMesh::ChooseShadowCasterLOD(
+								chosenLodIndex,
+								batch.lodResources.Num(),
+								shadowHistory.Tier);
 							OptimizedSkeletalMesh::FShadowCandidate& candidate = shadowCandidates.AddDefaulted_GetRef();
 							candidate.Instance = &instance;
-							candidate.LodIndex = chosenLodIndex;
+							candidate.LodIndex = shadowLodIndex;
 							candidate.DistanceSquared = distanceSquared;
 							candidate.bNearGuaranteed = bNearGuaranteed;
 							candidate.StableHash = OptimizedSkeletalMesh::GetStableShadowHash(instance.InstanceId);
