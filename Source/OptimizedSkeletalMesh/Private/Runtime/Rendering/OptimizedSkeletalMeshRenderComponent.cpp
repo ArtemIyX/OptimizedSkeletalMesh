@@ -1107,6 +1107,8 @@ public:
 
 			FOptimizedSkeletalMeshRenderStats frameStats;
 			frameStats.FrameNumber = static_cast<int32>(GFrameCounter);
+			frameStats.VisibleInstancesByLOD.SetNumZeroed(8);
+			frameStats.RenderVisibleInstanceIds.Reserve(RegisteredInstanceCount);
 			frameStats.RegisteredInstances = RegisteredInstanceCount;
 			frameStats.MeshBatches = MeshBatches.Num();
 			frameStats.SkinningPaletteInstances = SkinningPaletteInstances;
