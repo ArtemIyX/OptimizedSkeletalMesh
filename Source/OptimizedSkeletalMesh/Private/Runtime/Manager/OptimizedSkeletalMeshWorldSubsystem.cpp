@@ -996,6 +996,161 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstance(
 	return true;
 }
 
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceById(
+	const int32 InInstanceId,
+	FOptimizedSkeletalMeshInstanceDesc& OutDesc) const
+{
+	return GetInstance(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), OutDesc);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationAsset(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	UAnimSequence* InAnimation,
+	const bool bInResetTime)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance || !instance->SkeletalMesh)
+	{
+		return false;
+	}
+
+	if (InAnimation)
+	{
+		const USkeleton* meshSkeleton = instance->SkeletalMesh->GetSkeleton();
+		const USkeleton* animationSkeleton = InAnimation->GetSkeleton();
+		if (!meshSkeleton || !animationSkeleton || meshSkeleton != animationSkeleton)
+		{
+			return false;
+		}
+	}
+
+	instance->Animation = InAnimation;
+	if (bInResetTime)
+	{
+		instance->AnimationTime = 0.0f;
+	}
+
+	if (!InAnimation)
+	{
+		instance->bPlayAnimation = false;
+	}
+
+	RefreshAnimationTracking(InHandle.Id, *instance, true);
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationAssetById(
+	const int32 InInstanceId,
+	UAnimSequence* InAnimation,
+	const bool bInResetTime)
+{
+	return SetInstanceAnimationAsset(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InAnimation, bInResetTime);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::PlayInstanceAnimation(const FOptimizedSkeletalMeshInstanceHandle InHandle)
+{
+	return SetInstanceAnimationPlaying(InHandle, true);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::PlayInstanceAnimationById(const int32 InInstanceId)
+{
+	return PlayInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle(InInstanceId));
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::PauseInstanceAnimation(const FOptimizedSkeletalMeshInstanceHandle InHandle)
+{
+	return SetInstanceAnimationPlaying(InHandle, false);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::PauseInstanceAnimationById(const int32 InInstanceId)
+{
+	return PauseInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle(InInstanceId));
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::StopInstanceAnimation(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const bool bInResetTime)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	instance->bPlayAnimation = false;
+	if (bInResetTime)
+	{
+		instance->AnimationTime = 0.0f;
+	}
+
+	RefreshAnimationTracking(InHandle.Id, *instance, true);
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::StopInstanceAnimationById(
+	const int32 InInstanceId,
+	const bool bInResetTime)
+{
+	return StopInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), bInResetTime);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationLooping(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const bool bInLoopAnimation)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	instance->bLoopAnimation = bInLoopAnimation;
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationLoopingById(
+	const int32 InInstanceId,
+	const bool bInLoopAnimation)
+{
+	return SetInstanceAnimationLooping(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), bInLoopAnimation);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationPlayRate(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const float InAnimationPlayRate)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	instance->AnimationPlayRate = InAnimationPlayRate;
+	RefreshAnimationTracking(InHandle.Id, *instance, true);
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationPlayRateById(
+	const int32 InInstanceId,
+	const float InAnimationPlayRate)
+{
+	return SetInstanceAnimationPlayRate(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InAnimationPlayRate);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationTime(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const float InAnimationTime)
+{
+	return UpdateInstanceAnimationTime(InHandle, InAnimationTime);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationTimeById(
+	const int32 InInstanceId,
+	const float InAnimationTime)
+{
+	return SetInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InAnimationTime);
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::GetInstancesSnapshot(
 	TArray<FOptimizedSkeletalMeshInstanceSnapshot>& OutInstances) const
 {

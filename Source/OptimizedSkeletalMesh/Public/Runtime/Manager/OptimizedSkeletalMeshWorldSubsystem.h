@@ -322,6 +322,54 @@ public:
 	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceById(int32 InInstanceId, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool SetInstanceAnimationAsset(
+		FOptimizedSkeletalMeshInstanceHandle InHandle,
+		UAnimSequence* InAnimation,
+		bool bInResetTime = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool SetInstanceAnimationAssetById(int32 InInstanceId, UAnimSequence* InAnimation, bool bInResetTime = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool PlayInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle InHandle);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool PlayInstanceAnimationById(int32 InInstanceId);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool PauseInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle InHandle);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool PauseInstanceAnimationById(int32 InInstanceId);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool StopInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInResetTime = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool StopInstanceAnimationById(int32 InInstanceId, bool bInResetTime = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool SetInstanceAnimationLooping(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInLoopAnimation);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool SetInstanceAnimationLoopingById(int32 InInstanceId, bool bInLoopAnimation);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool SetInstanceAnimationPlayRate(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationPlayRate);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool SetInstanceAnimationPlayRateById(int32 InInstanceId, float InAnimationPlayRate);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool SetInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationTime);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
+	bool SetInstanceAnimationTimeById(int32 InInstanceId, float InAnimationTime);
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	void GetInstancesSnapshot(TArray<FOptimizedSkeletalMeshInstanceSnapshot>& OutInstances) const;
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
