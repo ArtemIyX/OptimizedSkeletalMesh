@@ -1146,6 +1146,15 @@ public:
 					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> shadowVisibleInstancesByLod;
 					shadowVisibleInstancesByLod.SetNum(batch.lodResources.Num());
 					TArray<OptimizedSkeletalMesh::FShadowCandidate> shadowCandidates;
+					shadowCandidates.Reserve(batch.InInstances.Num());
+					for (OptimizedSkeletalMesh::FVisibleLODInstances& lodInstances : visibleInstancesByLod)
+					{
+						lodInstances.InInstances.Reserve(batch.InInstances.Num());
+					}
+					for (OptimizedSkeletalMesh::FVisibleLODInstances& lodInstances : shadowVisibleInstancesByLod)
+					{
+						lodInstances.InInstances.Reserve(batch.InInstances.Num());
+					}
 
 					for (const OptimizedSkeletalMesh::FRenderInstance& instance : batch.InInstances)
 					{
