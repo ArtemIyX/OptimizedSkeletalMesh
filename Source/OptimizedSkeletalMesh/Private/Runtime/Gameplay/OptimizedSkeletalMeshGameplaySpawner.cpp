@@ -4,7 +4,6 @@
 
 #include "Animation/AnimSequence.h"
 #include "Engine/World.h"
-#include "Logging/LogMacros.h"
 
 AOptimizedSkeletalMeshGameplaySpawner::AOptimizedSkeletalMeshGameplaySpawner()
 {
@@ -17,30 +16,6 @@ void AOptimizedSkeletalMeshGameplaySpawner::BeginPlay()
 {
 	Super::BeginPlay();
 	RebuildInstances();
-	const UWorld* world = GetWorld();
-	if (UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetSubsystem())
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("OSM Spawner BeginPlay: world=%s type=%d netmode=%d instances=%d mesh=%s anim=%s"),
-			*GetNameSafe(world),
-			world ? static_cast<int32>(world->WorldType) : -1,
-			world ? static_cast<int32>(world->GetNetMode()) : -1,
-			subsystem->GetInstanceCount(),
-			*GetNameSafe(Mesh),
-			*GetNameSafe(Anim));
-	}
-	else
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("OSM Spawner BeginPlay: skipped world=%s type=%d netmode=%d"),
-			*GetNameSafe(world),
-			world ? static_cast<int32>(world->WorldType) : -1,
-			world ? static_cast<int32>(world->GetNetMode()) : -1);
-	}
 }
 
 void AOptimizedSkeletalMeshGameplaySpawner::EndPlay(const EEndPlayReason::Type InEndPlayReason)
