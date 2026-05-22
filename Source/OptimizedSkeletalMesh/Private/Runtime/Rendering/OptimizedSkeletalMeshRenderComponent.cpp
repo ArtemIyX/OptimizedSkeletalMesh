@@ -1274,20 +1274,23 @@ public:
 						}
 					}
 
-					shadowCandidates.Sort(
-						[](const OptimizedSkeletalMesh::FShadowCandidate& InLeft, const OptimizedSkeletalMesh::FShadowCandidate& InRight) {
-							if (InLeft.bNearGuaranteed != InRight.bNearGuaranteed)
-							{
-								return InLeft.bNearGuaranteed && !InRight.bNearGuaranteed;
-							}
+					if (shadowCandidates.Num() > 1)
+					{
+						shadowCandidates.Sort(
+							[](const OptimizedSkeletalMesh::FShadowCandidate& InLeft, const OptimizedSkeletalMesh::FShadowCandidate& InRight) {
+								if (InLeft.bNearGuaranteed != InRight.bNearGuaranteed)
+								{
+									return InLeft.bNearGuaranteed && !InRight.bNearGuaranteed;
+								}
 
-							if (!FMath::IsNearlyEqual(InLeft.DistanceSquared, InRight.DistanceSquared))
-							{
-								return InLeft.DistanceSquared < InRight.DistanceSquared;
-							}
+								if (!FMath::IsNearlyEqual(InLeft.DistanceSquared, InRight.DistanceSquared))
+								{
+									return InLeft.DistanceSquared < InRight.DistanceSquared;
+								}
 
-							return InLeft.StableHash < InRight.StableHash;
-						});
+								return InLeft.StableHash < InRight.StableHash;
+							});
+					}
 
 					for (const OptimizedSkeletalMesh::FShadowCandidate& candidate : shadowCandidates)
 					{
