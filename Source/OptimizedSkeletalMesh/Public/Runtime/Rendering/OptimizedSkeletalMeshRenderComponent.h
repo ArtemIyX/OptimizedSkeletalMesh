@@ -131,6 +131,8 @@ public:
 	void SetConservativeProxyBoundsExtent(float InConservativeProxyBoundsExtent);
 	void SetDrawCullingDebug(bool bInDrawCullingDebug);
 	void SetDrawCullTestBounds(bool bInDrawCullTestBounds);
+	void SetCastShadows(bool bInCastShadows);
+	void SetMaxShadowCastDistance(float InMaxShadowCastDistance);
 	void RequestRenderRefresh();
 	bool PushBonePalettesToRenderThread();
 #pragma endregion
@@ -146,6 +148,8 @@ public:
 	float GetConservativeProxyBoundsExtent() const { return ConservativeProxyBoundsExtent; }
 	bool ShouldDrawCullingDebug() const { return bDrawCullingDebug; }
 	bool ShouldDrawCullTestBounds() const { return bDrawCullTestBounds; }
+	bool ShouldCastShadows() const { return bCastShadows; }
+	float GetMaxShadowCastDistance() const { return MaxShadowCastDistance; }
 	const FOptimizedSkeletalMeshRenderStats& GetLastRenderStats() const { return LastRenderStats; }
 	void ApplyRenderStats_GameThread(const FOptimizedSkeletalMeshRenderStats& InStats);
 #pragma endregion
@@ -188,6 +192,12 @@ private:
 
 	UPROPERTY(Transient)
 	bool bDrawCullTestBounds = true;
+
+	UPROPERTY(Transient)
+	bool bCastShadows = true;
+
+	UPROPERTY(Transient)
+	float MaxShadowCastDistance = 5000.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats", meta = (AllowPrivateAccess = "true"))
 	FOptimizedSkeletalMeshRenderStats LastRenderStats;

@@ -123,6 +123,18 @@ namespace OptimizedSkeletalMesh
 		TEXT("Override bDrawCullTestBounds when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
 		ECVF_Default);
 
+	static TAutoConsoleVariable<int32> CVarRenderCastShadows(
+		TEXT("osm.Render.CastShadows"),
+		1,
+		TEXT("Override bCastShadows when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<float> CVarRenderMaxShadowCastDistance(
+		TEXT("osm.Render.MaxShadowCastDistance"),
+		5000.0f,
+		TEXT("Override MaxShadowCastDistance when osm.Render.OverrideEnabled=1.\n<= 0 means no distance limit."),
+		ECVF_Default);
+
 	static TAutoConsoleVariable<int32> CVarAnimationMaxDirtyEvaluationsPerFrame(
 		TEXT("osm.Animation.MaxDirtyEvaluationsPerFrame"),
 		512,
@@ -135,6 +147,7 @@ namespace OptimizedSkeletalMesh
 		FOptimizedSkeletalMeshRenderSettings normalizedSettings = InSettings;
 		normalizedSettings.InstanceCullBoundsScale = FMath::Max(1.0f, InSettings.InstanceCullBoundsScale);
 		normalizedSettings.ConservativeProxyBoundsExtent = FMath::Max(1000.0f, InSettings.ConservativeProxyBoundsExtent);
+		normalizedSettings.MaxShadowCastDistance = FMath::Max(0.0f, InSettings.MaxShadowCastDistance);
 		normalizedSettings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
 			FMath::Clamp(static_cast<int32>(InSettings.MeshDrawMode), 0, 3));
 		return normalizedSettings;
@@ -160,6 +173,8 @@ namespace OptimizedSkeletalMesh
 		resolvedSettings.ConservativeProxyBoundsExtent = CVarRenderConservativeProxyBoundsExtent.GetValueOnGameThread();
 		resolvedSettings.bDrawCullingDebug = CVarRenderDrawCullingDebug.GetValueOnGameThread() != 0;
 		resolvedSettings.bDrawCullTestBounds = CVarRenderDrawCullTestBounds.GetValueOnGameThread() != 0;
+		resolvedSettings.bCastShadows = CVarRenderCastShadows.GetValueOnGameThread() != 0;
+		resolvedSettings.MaxShadowCastDistance = CVarRenderMaxShadowCastDistance.GetValueOnGameThread();
 
 		return NormalizeRenderSettings(resolvedSettings);
 	}
@@ -176,7 +191,9 @@ namespace OptimizedSkeletalMesh
 			&& InLeft.bUseConservativeProxyBounds == InRight.bUseConservativeProxyBounds
 			&& FMath::IsNearlyEqual(InLeft.ConservativeProxyBoundsExtent, InRight.ConservativeProxyBoundsExtent)
 			&& InLeft.bDrawCullingDebug == InRight.bDrawCullingDebug
-			&& InLeft.bDrawCullTestBounds == InRight.bDrawCullTestBounds;
+			&& InLeft.bDrawCullTestBounds == InRight.bDrawCullTestBounds
+			&& InLeft.bCastShadows == InRight.bCastShadows
+			&& FMath::IsNearlyEqual(InLeft.MaxShadowCastDistance, InRight.MaxShadowCastDistance);
 	}
 
 	static void PublishAnimationStats(const FOptimizedSkeletalMeshAnimationStats& InStats)
@@ -241,6 +258,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
 	CurrentRenderSettings = FOptimizedSkeletalMeshRenderSettings();
+	if (const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>())
+	{
+		CurrentRenderSettings.bCastShadows = settings->bCastShadows;
+		CurrentRenderSettings.MaxShadowCastDistance = settings->MaxShadowCastDistance;
+	}
 	ActiveRenderSettings = CurrentRenderSettings;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 	RefreshActiveRenderSettings(true);
@@ -268,6 +290,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
 	CurrentRenderSettings = FOptimizedSkeletalMeshRenderSettings();
+	if (const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>())
+	{
+		CurrentRenderSettings.bCastShadows = settings->bCastShadows;
+		CurrentRenderSettings.MaxShadowCastDistance = settings->MaxShadowCastDistance;
+	}
 	ActiveRenderSettings = CurrentRenderSettings;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 
@@ -757,6 +784,8 @@ void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent(UOptim
 	InComponent->SetConservativeProxyBoundsExtent(ActiveRenderSettings.ConservativeProxyBoundsExtent);
 	InComponent->SetDrawCullingDebug(ActiveRenderSettings.bDrawCullingDebug);
 	InComponent->SetDrawCullTestBounds(ActiveRenderSettings.bDrawCullTestBounds);
+	InComponent->SetCastShadows(ActiveRenderSettings.bCastShadows);
+	InComponent->SetMaxShadowCastDistance(ActiveRenderSettings.MaxShadowCastDistance);
 }
 
 const TArray<FMatrix44f>* UOptimizedSkeletalMeshWorldSubsystem::GetInstanceBonePalette(

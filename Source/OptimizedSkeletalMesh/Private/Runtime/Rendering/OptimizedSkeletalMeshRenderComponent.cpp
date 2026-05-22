@@ -813,6 +813,27 @@ namespace OptimizedSkeletalMesh
 
 		return FMath::Clamp(chosenLOD, 0, InNumLODs - 1);
 	}
+
+	static bool ShouldCastShadowForInstance(
+		const FSceneView& InView,
+		const FRenderInstance& InInstance,
+		const bool bInCastShadows,
+		const float InMaxShadowCastDistance)
+	{
+		if (!bInCastShadows)
+		{
+			return false;
+		}
+
+		if (InMaxShadowCastDistance <= 0.0f)
+		{
+			return true;
+		}
+
+		const FVector instanceCenter = InInstance.worldBounds.GetCenter();
+		const float distanceSquared = FVector::DistSquared(InView.ViewMatrices.GetViewOrigin(), instanceCenter);
+		return distanceSquared <= FMath::Square(InMaxShadowCastDistance);
+	}
 } // namespace OptimizedSkeletalMesh
 
 class FOptimizedSkeletalMeshSceneProxy final : public FPrimitiveSceneProxy
@@ -829,6 +850,8 @@ public:
 		, InstanceCullBoundsScale(InComponent->GetInstanceCullBoundsScale())
 		, bDrawCullingDebug(InComponent->ShouldDrawCullingDebug())
 		, bDrawCullTestBounds(InComponent->ShouldDrawCullTestBounds())
+		, bCastShadows(InComponent->ShouldCastShadows())
+		, MaxShadowCastDistance(InComponent->GetMaxShadowCastDistance())
 	{
 		if (const UWorld* world = InComponent->GetWorld())
 		{
@@ -1095,6 +1118,30 @@ public:
 							frameStats.SkinningGPUSkinFallbackDraws += visibleInstances.Num();
 						}
 
+						bool bCastShadowForLodDraw = false;
+						if (!bIsWireframeView && bCastShadows)
+						{
+							if (MaxShadowCastDistance <= 0.0f)
+							{
+								bCastShadowForLodDraw = true;
+							}
+							else
+							{
+								for (const OptimizedSkeletalMesh::FRenderInstance* visibleInstance : visibleInstances)
+								{
+									if (visibleInstance && OptimizedSkeletalMesh::ShouldCastShadowForInstance(
+											*InViews[viewIndex],
+											*visibleInstance,
+											bCastShadows,
+											MaxShadowCastDistance))
+									{
+										bCastShadowForLodDraw = true;
+										break;
+									}
+								}
+							}
+						}
+
 						TArray<uint32> instancePaletteOffsets;
 						FRHIShaderResourceView* instancePaletteOffsetSRV = nullptr;
 						if (bUseGpuSkinningForLOD)
@@ -1196,7 +1243,7 @@ public:
 							mesh.Type = PT_TriangleList;
 							mesh.DepthPriorityGroup = SDPG_World;
 							mesh.bCanApplyViewModeOverrides = true;
-							mesh.CastShadow = false;
+							mesh.CastShadow = bCastShadowForLodDraw;
 							mesh.bWireframe = bIsWireframeView;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 							mesh.VisualizeLODIndex = lodIndex;
@@ -1346,7 +1393,12 @@ public:
 								mesh.Type = PT_TriangleList;
 								mesh.DepthPriorityGroup = SDPG_World;
 								mesh.bCanApplyViewModeOverrides = true;
-								mesh.CastShadow = false;
+								mesh.CastShadow = !bIsWireframeView
+									&& OptimizedSkeletalMesh::ShouldCastShadowForInstance(
+										*InViews[viewIndex],
+										instance,
+										bCastShadows,
+										MaxShadowCastDistance);
 								mesh.bWireframe = bIsWireframeView;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 								mesh.VisualizeLODIndex = chosenLodIndex;
@@ -1402,7 +1454,7 @@ public:
 		result.bDrawRelevance = IsShown(InView);
 		result.bDynamicRelevance = true;
 		result.bOpaque = bDrawMeshSections;
-		result.bShadowRelevance = false;
+		result.bShadowRelevance = bCastShadows;
 		result.bEditorPrimitiveRelevance = UseEditorCompositing(InView);
 		return result;
 	}
@@ -1566,6 +1618,8 @@ private:
 	float InstanceCullBoundsScale = 1.5f;
 	bool bDrawCullingDebug = false;
 	bool bDrawCullTestBounds = true;
+	bool bCastShadows = true;
+	float MaxShadowCastDistance = 5000.0f;
 };
 
 UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(const FObjectInitializer& InObjectInitializer)
@@ -1574,8 +1628,8 @@ UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(con
 	Mobility = EComponentMobility::Movable;
 	BodyInstance.SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetGenerateOverlapEvents(false);
-	bCastDynamicShadow = false;
-	CastShadow = false;
+	bCastDynamicShadow = true;
+	CastShadow = true;
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetOptimizedSkeletalMeshSubsystem(
@@ -1642,6 +1696,20 @@ void UOptimizedSkeletalMeshRenderComponent::SetDrawCullingDebug(const bool bInDr
 void UOptimizedSkeletalMeshRenderComponent::SetDrawCullTestBounds(const bool bInDrawCullTestBounds)
 {
 	bDrawCullTestBounds = bInDrawCullTestBounds;
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetCastShadows(const bool bInCastShadows)
+{
+	bCastShadows = bInCastShadows;
+	bCastDynamicShadow = bInCastShadows;
+	CastShadow = bInCastShadows;
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetMaxShadowCastDistance(const float InMaxShadowCastDistance)
+{
+	MaxShadowCastDistance = FMath::Max(0.0f, InMaxShadowCastDistance);
 	RequestRenderRefresh();
 }
 

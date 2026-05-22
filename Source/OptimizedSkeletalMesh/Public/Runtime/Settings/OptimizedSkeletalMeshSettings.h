@@ -66,4 +66,12 @@ public:
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation", meta = (EditCondition = "DistanceBasedRateMode == EOptimizedSkeletalMeshDistanceBasedRateMode::DistanceBasedCurve"))
 	TSoftObjectPtr<UCurveFloat> DistanceUpdateRateCurve;
 #pragma endregion
+
+#pragma region Rendering
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
+	bool bCastShadows = true;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0.0"))
+	float MaxShadowCastDistance = 5000.0f;
+#pragma endregion
 };

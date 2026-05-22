@@ -202,6 +202,12 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
 	bool bDrawCullTestBounds = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
+	bool bCastShadows = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0.0"))
+	float MaxShadowCastDistance = 5000.0f;
 };
 
 UCLASS()
