@@ -141,6 +141,10 @@ public:
 	void SetFarShadowUpdateDivisor(int32 InFarShadowUpdateDivisor);
 	void SetMaxShadowCastDistance(float InMaxShadowCastDistance);
 	void SetMaxDynamicShadowCasters(int32 InMaxDynamicShadowCasters);
+	void SetNearShadowLodBias(int32 InNearShadowLodBias);
+	void SetMidShadowLodBias(int32 InMidShadowLodBias);
+	void SetFarShadowLodBias(int32 InFarShadowLodBias);
+	void SetMaxShadowSectionsPerLOD(int32 InMaxShadowSectionsPerLOD);
 	void RequestRenderRefresh();
 	bool PushBonePalettesToRenderThread();
 #pragma endregion
@@ -163,6 +167,10 @@ public:
 	int32 GetFarShadowUpdateDivisor() const { return FarShadowUpdateDivisor; }
 	float GetMaxShadowCastDistance() const { return MaxShadowCastDistance; }
 	int32 GetMaxDynamicShadowCasters() const { return MaxDynamicShadowCasters; }
+	int32 GetNearShadowLodBias() const { return NearShadowLodBias; }
+	int32 GetMidShadowLodBias() const { return MidShadowLodBias; }
+	int32 GetFarShadowLodBias() const { return FarShadowLodBias; }
+	int32 GetMaxShadowSectionsPerLOD() const { return MaxShadowSectionsPerLOD; }
 	const FOptimizedSkeletalMeshRenderStats& GetLastRenderStats() const { return LastRenderStats; }
 	void ApplyRenderStats_GameThread(const FOptimizedSkeletalMeshRenderStats& InStats);
 #pragma endregion
@@ -226,6 +234,18 @@ private:
 
 	UPROPERTY(Transient)
 	int32 MaxDynamicShadowCasters = 120;
+
+	UPROPERTY(Transient)
+	int32 NearShadowLodBias = 0;
+
+	UPROPERTY(Transient)
+	int32 MidShadowLodBias = 1;
+
+	UPROPERTY(Transient)
+	int32 FarShadowLodBias = 2;
+
+	UPROPERTY(Transient)
+	int32 MaxShadowSectionsPerLOD = 2;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats", meta = (AllowPrivateAccess = "true"))
 	FOptimizedSkeletalMeshRenderStats LastRenderStats;

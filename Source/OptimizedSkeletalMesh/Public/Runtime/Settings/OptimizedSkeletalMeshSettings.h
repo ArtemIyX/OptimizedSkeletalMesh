@@ -120,5 +120,17 @@ public:
 
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0"))
 	int32 MaxDynamicShadowCasters = 120;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0"))
+	int32 NearShadowLodBias = 0;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0"))
+	int32 MidShadowLodBias = 1;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0"))
+	int32 FarShadowLodBias = 2;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0"))
+	int32 MaxShadowSectionsPerLOD = 2;
 #pragma endregion
 };

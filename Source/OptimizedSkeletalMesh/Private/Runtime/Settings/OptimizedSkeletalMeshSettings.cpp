@@ -43,6 +43,10 @@ namespace OptimizedSkeletalMesh
 		SetConsoleInt(TEXT("osm.Render.FarShadowUpdateDivisor"), InSettings.FarShadowUpdateDivisor);
 		SetConsoleFloat(TEXT("osm.Render.MaxShadowCastDistance"), InSettings.MaxShadowCastDistance);
 		SetConsoleInt(TEXT("osm.Render.MaxDynamicShadowCasters"), InSettings.MaxDynamicShadowCasters);
+		SetConsoleInt(TEXT("osm.Render.NearShadowLodBias"), InSettings.NearShadowLodBias);
+		SetConsoleInt(TEXT("osm.Render.MidShadowLodBias"), InSettings.MidShadowLodBias);
+		SetConsoleInt(TEXT("osm.Render.FarShadowLodBias"), InSettings.FarShadowLodBias);
+		SetConsoleInt(TEXT("osm.Render.MaxShadowSectionsPerLOD"), InSettings.MaxShadowSectionsPerLOD);
 	}
 } // namespace OptimizedSkeletalMesh
 

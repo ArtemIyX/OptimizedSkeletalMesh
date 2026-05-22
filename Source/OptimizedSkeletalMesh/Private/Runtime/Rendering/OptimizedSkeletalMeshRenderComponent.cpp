@@ -840,7 +840,10 @@ namespace OptimizedSkeletalMesh
 	static int32 ChooseShadowCasterLOD(
 		const int32 InColorLodIndex,
 		const int32 InNumLODs,
-		const EShadowTier InShadowTier)
+		const EShadowTier InShadowTier,
+		const int32 InNearShadowLodBias,
+		const int32 InMidShadowLodBias,
+		const int32 InFarShadowLodBias)
 	{
 		if (InNumLODs <= 1)
 		{
@@ -850,10 +853,15 @@ namespace OptimizedSkeletalMesh
 		const int32 clampedColorLod = FMath::Clamp(InColorLodIndex, 0, InNumLODs - 1);
 		if (InShadowTier == EShadowTier::Mid)
 		{
-			return FMath::Min(clampedColorLod + 1, InNumLODs - 1);
+			return FMath::Min(clampedColorLod + FMath::Max(0, InMidShadowLodBias), InNumLODs - 1);
 		}
 
-		return clampedColorLod;
+		if (InShadowTier == EShadowTier::Near)
+		{
+			return FMath::Min(clampedColorLod + FMath::Max(0, InNearShadowLodBias), InNumLODs - 1);
+		}
+
+		return FMath::Min(clampedColorLod + FMath::Max(0, InFarShadowLodBias), InNumLODs - 1);
 	}
 
 	static uint32 GetStableShadowHash(const int32 InInstanceId)
@@ -1012,6 +1020,10 @@ public:
 		, FarShadowUpdateDivisor(InComponent->GetFarShadowUpdateDivisor())
 		, MaxShadowCastDistance(InComponent->GetMaxShadowCastDistance())
 		, MaxDynamicShadowCasters(InComponent->GetMaxDynamicShadowCasters())
+		, NearShadowLodBias(InComponent->GetNearShadowLodBias())
+		, MidShadowLodBias(InComponent->GetMidShadowLodBias())
+		, FarShadowLodBias(InComponent->GetFarShadowLodBias())
+		, MaxShadowSectionsPerLOD(InComponent->GetMaxShadowSectionsPerLOD())
 	{
 		if (const UWorld* world = InComponent->GetWorld())
 		{
@@ -1230,7 +1242,7 @@ public:
 							shadowHistory);
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
 						{
-							frameStats.RenderVisibleInstanceIds.AddUnique(instance.InstanceId);
+							frameStats.RenderVisibleInstanceIds.Add(instance.InstanceId);
 						}
 						const int32 chosenLodIndex = OptimizedSkeletalMesh::ChooseLODForView(
 							*InViews[viewIndex],
@@ -1249,7 +1261,10 @@ public:
 							const int32 shadowLodIndex = OptimizedSkeletalMesh::ChooseShadowCasterLOD(
 								chosenLodIndex,
 								batch.lodResources.Num(),
-								shadowHistory.Tier);
+								shadowHistory.Tier,
+								NearShadowLodBias,
+								MidShadowLodBias,
+								FarShadowLodBias);
 							OptimizedSkeletalMesh::FShadowCandidate& candidate = shadowCandidates.AddDefaulted_GetRef();
 							candidate.Instance = &instance;
 							candidate.LodIndex = shadowLodIndex;
@@ -1429,6 +1444,7 @@ public:
 								false);
 						}
 
+						int32 shadowSubmittedSectionsForLod = 0;
 						for (const FSkelMeshRenderSection& renderSection : lodResources->LODRenderData->RenderSections)
 						{
 							if (!renderSection.IsValid())
@@ -1522,6 +1538,13 @@ public:
 								&& shadowDynamicPrimitiveUniformBuffer
 								&& shadowWorldBounds.IsValid)
 							{
+								const bool bAllowShadowSection = MaxShadowSectionsPerLOD <= 0
+									|| shadowSubmittedSectionsForLod < MaxShadowSectionsPerLOD;
+								if (!bAllowShadowSection)
+								{
+									continue;
+								}
+
 								FOptimizedSkeletalMeshVertexFactoryUserData* shadowSkinnedFactoryUserData = nullptr;
 								if (bUseGpuSkinningForLOD)
 								{
@@ -1595,6 +1618,7 @@ public:
 								++frameStats.SubmittedDrawCalls;
 								++frameStats.SubmittedSections;
 								frameStats.SubmittedTriangles += renderSection.NumTriangles;
+								++shadowSubmittedSectionsForLod;
 							}
 						}
 					}
@@ -1682,7 +1706,7 @@ public:
 						++frameStats.DrawnInstances;
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
 						{
-							frameStats.RenderVisibleInstanceIds.AddUnique(instance.InstanceId);
+							frameStats.RenderVisibleInstanceIds.Add(instance.InstanceId);
 						}
 						OptimizedSkeletalMesh::AddVisibleLODStat(frameStats, chosenLodIndex, 1);
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::DynamicMeshProof)
@@ -1980,6 +2004,10 @@ private:
 	int32 FarShadowUpdateDivisor = 0;
 	float MaxShadowCastDistance = 5000.0f;
 	int32 MaxDynamicShadowCasters = 120;
+	int32 NearShadowLodBias = 0;
+	int32 MidShadowLodBias = 1;
+	int32 FarShadowLodBias = 2;
+	int32 MaxShadowSectionsPerLOD = 2;
 };
 
 UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(const FObjectInitializer& InObjectInitializer)
@@ -2100,6 +2128,30 @@ void UOptimizedSkeletalMeshRenderComponent::SetMaxShadowCastDistance(const float
 void UOptimizedSkeletalMeshRenderComponent::SetMaxDynamicShadowCasters(const int32 InMaxDynamicShadowCasters)
 {
 	MaxDynamicShadowCasters = FMath::Max(0, InMaxDynamicShadowCasters);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetNearShadowLodBias(const int32 InNearShadowLodBias)
+{
+	NearShadowLodBias = FMath::Max(0, InNearShadowLodBias);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetMidShadowLodBias(const int32 InMidShadowLodBias)
+{
+	MidShadowLodBias = FMath::Max(0, InMidShadowLodBias);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetFarShadowLodBias(const int32 InFarShadowLodBias)
+{
+	FarShadowLodBias = FMath::Max(0, InFarShadowLodBias);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetMaxShadowSectionsPerLOD(const int32 InMaxShadowSectionsPerLOD)
+{
+	MaxShadowSectionsPerLOD = FMath::Max(0, InMaxShadowSectionsPerLOD);
 	RequestRenderRefresh();
 }
 
