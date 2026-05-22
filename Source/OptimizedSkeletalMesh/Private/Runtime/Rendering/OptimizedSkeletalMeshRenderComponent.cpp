@@ -39,6 +39,7 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("Registered InInstances"), STAT_OptimizedSkeleta
 DECLARE_DWORD_COUNTER_STAT(TEXT("mesh Batches"), STAT_OptimizedSkeletalMeshMeshBatches, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Tested Instances"), STAT_OptimizedSkeletalMeshTestedInstances, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Visible Instances"), STAT_OptimizedSkeletalMeshVisibleInstances, STATGROUP_OSMRendering);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Shadow Visible Instances"), STAT_OptimizedSkeletalMeshShadowVisibleInstances, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Culled Instances"), STAT_OptimizedSkeletalMeshCulledInstances, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Drawn Instances"), STAT_OptimizedSkeletalMeshDrawnInstances, STATGROUP_OSMRendering);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Submitted Draw Calls"), STAT_OptimizedSkeletalMeshSubmittedDrawCalls, STATGROUP_OSMRendering);
@@ -1005,6 +1006,8 @@ public:
 				{
 					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> visibleInstancesByLod;
 					visibleInstancesByLod.SetNum(batch.lodResources.Num());
+					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> shadowVisibleInstancesByLod;
+					shadowVisibleInstancesByLod.SetNum(batch.lodResources.Num());
 
 					for (const OptimizedSkeletalMesh::FRenderInstance& instance : batch.InInstances)
 					{
@@ -1047,6 +1050,15 @@ public:
 						}
 
 						++frameStats.VisibleInstances;
+						const bool bInstanceShadowVisible = OptimizedSkeletalMesh::ShouldCastShadowForInstance(
+							*InViews[viewIndex],
+							instance,
+							bCastShadows,
+							MaxShadowCastDistance);
+						if (bInstanceShadowVisible)
+						{
+							++frameStats.ShadowVisibleInstances;
+						}
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
 						{
 							frameStats.RenderVisibleInstanceIds.AddUnique(instance.InstanceId);
@@ -1063,6 +1075,10 @@ public:
 						}
 
 						visibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
+						if (bInstanceShadowVisible)
+						{
+							shadowVisibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
+						}
 						++drawnMeshInstances;
 						++frameStats.DrawnInstances;
 						OptimizedSkeletalMesh::AddVisibleLODStat(frameStats, chosenLodIndex, 1);
@@ -1093,21 +1109,36 @@ public:
 
 						const TArray<const OptimizedSkeletalMesh::FRenderInstance*>& visibleInstances =
 							visibleInstancesByLod[lodIndex].InInstances;
+						const TArray<const OptimizedSkeletalMesh::FRenderInstance*>& shadowVisibleInstances =
+							shadowVisibleInstancesByLod[lodIndex].InInstances;
 						if (visibleInstances.IsEmpty())
 						{
 							continue;
 						}
 
-						FMeshBatchDynamicPrimitiveData* dynamicPrimitiveData = nullptr;
-						FBox worldBounds(ForceInit);
+						FMeshBatchDynamicPrimitiveData* baseDynamicPrimitiveData = nullptr;
+						FBox baseWorldBounds(ForceInit);
 						OptimizedSkeletalMesh::BuildDynamicPrimitiveInstanceData(
 							InCollector,
 							MakeArrayView(visibleInstances),
-							dynamicPrimitiveData,
-							worldBounds);
-						if (!dynamicPrimitiveData || !worldBounds.IsValid)
+							baseDynamicPrimitiveData,
+							baseWorldBounds);
+						if (!baseDynamicPrimitiveData || !baseWorldBounds.IsValid)
 						{
 							continue;
+						}
+
+						const bool bSubmitShadowOnlyMesh =
+							!bIsWireframeView && bCastShadows && !shadowVisibleInstances.IsEmpty();
+						FMeshBatchDynamicPrimitiveData* shadowDynamicPrimitiveData = nullptr;
+						FBox shadowWorldBounds(ForceInit);
+						if (bSubmitShadowOnlyMesh)
+						{
+							OptimizedSkeletalMesh::BuildDynamicPrimitiveInstanceData(
+								InCollector,
+								MakeArrayView(shadowVisibleInstances),
+								shadowDynamicPrimitiveData,
+								shadowWorldBounds);
 						}
 
 						const bool bUseGpuSkinningForLOD =
@@ -1118,64 +1149,74 @@ public:
 							frameStats.SkinningGPUSkinFallbackDraws += visibleInstances.Num();
 						}
 
-						bool bCastShadowForLodDraw = false;
-						if (!bIsWireframeView && bCastShadows)
-						{
-							if (MaxShadowCastDistance <= 0.0f)
-							{
-								bCastShadowForLodDraw = true;
-							}
-							else
-							{
-								for (const OptimizedSkeletalMesh::FRenderInstance* visibleInstance : visibleInstances)
-								{
-									if (visibleInstance && OptimizedSkeletalMesh::ShouldCastShadowForInstance(
-											*InViews[viewIndex],
-											*visibleInstance,
-											bCastShadows,
-											MaxShadowCastDistance))
-									{
-										bCastShadowForLodDraw = true;
-										break;
-									}
-								}
-							}
-						}
-
-						TArray<uint32> instancePaletteOffsets;
-						FRHIShaderResourceView* instancePaletteOffsetSRV = nullptr;
+						TArray<uint32> baseInstancePaletteOffsets;
+						FRHIShaderResourceView* baseInstancePaletteOffsetSRV = nullptr;
+						TArray<uint32> shadowInstancePaletteOffsets;
+						FRHIShaderResourceView* shadowInstancePaletteOffsetSRV = nullptr;
 						if (bUseGpuSkinningForLOD)
 						{
-							instancePaletteOffsets.Reserve(visibleInstances.Num());
+							baseInstancePaletteOffsets.Reserve(visibleInstances.Num());
 							for (const OptimizedSkeletalMesh::FRenderInstance* visibleInstance : visibleInstances)
 							{
 								const OptimizedSkeletalMesh::FBonePaletteRange* range =
 									visibleInstance ? BonePaletteRangesByInstanceId.Find(visibleInstance->InstanceId) : nullptr;
-								instancePaletteOffsets.Add(range ? range->Offset : 0u);
+								baseInstancePaletteOffsets.Add(range ? range->Offset : 0u);
 								if (!range)
 								{
 									++frameStats.SkinningGPUSkinFallbackDraws;
 								}
 							}
 
-							instancePaletteOffsetSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
+							baseInstancePaletteOffsetSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
 								InCollector,
-								MakeArrayView(instancePaletteOffsets));
-							frameStats.SkinningGPUInstanceOffsetEntries += instancePaletteOffsets.Num();
+								MakeArrayView(baseInstancePaletteOffsets));
+							frameStats.SkinningGPUInstanceOffsetEntries += baseInstancePaletteOffsets.Num();
+
+							if (bSubmitShadowOnlyMesh)
+							{
+								shadowInstancePaletteOffsets.Reserve(shadowVisibleInstances.Num());
+								for (const OptimizedSkeletalMesh::FRenderInstance* shadowInstance : shadowVisibleInstances)
+								{
+									const OptimizedSkeletalMesh::FBonePaletteRange* range =
+										shadowInstance ? BonePaletteRangesByInstanceId.Find(shadowInstance->InstanceId) : nullptr;
+									shadowInstancePaletteOffsets.Add(range ? range->Offset : 0u);
+								}
+
+								shadowInstancePaletteOffsetSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
+									InCollector,
+									MakeArrayView(shadowInstancePaletteOffsets));
+								frameStats.SkinningGPUInstanceOffsetEntries += shadowInstancePaletteOffsets.Num();
+							}
 						}
 
-						FDynamicPrimitiveUniformBuffer& dynamicPrimitiveUniformBuffer =
+						FDynamicPrimitiveUniformBuffer& baseDynamicPrimitiveUniformBuffer =
 							InCollector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
 						const FMatrix primitiveLocalToWorld = FMatrix::Identity;
-						dynamicPrimitiveUniformBuffer.Set(
+						baseDynamicPrimitiveUniformBuffer.Set(
 							InCollector.GetRHICommandList(),
 							primitiveLocalToWorld,
 							primitiveLocalToWorld,
-							worldBounds,
+							baseWorldBounds,
 							GetLocalBounds(),
 							true,
 							false,
 							false);
+
+						FDynamicPrimitiveUniformBuffer* shadowDynamicPrimitiveUniformBuffer = nullptr;
+						if (bSubmitShadowOnlyMesh && shadowDynamicPrimitiveData && shadowWorldBounds.IsValid)
+						{
+							shadowDynamicPrimitiveUniformBuffer =
+								&InCollector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
+							shadowDynamicPrimitiveUniformBuffer->Set(
+								InCollector.GetRHICommandList(),
+								primitiveLocalToWorld,
+								primitiveLocalToWorld,
+								shadowWorldBounds,
+								GetLocalBounds(),
+								true,
+								false,
+								false);
+						}
 
 						for (const FSkelMeshRenderSection& renderSection : lodResources->LODRenderData->RenderSections)
 						{
@@ -1212,7 +1253,7 @@ public:
 									BonePalettePooledBuffer
 									? const_cast<FRDGPooledBuffer*>(BonePalettePooledBuffer.GetReference())->GetSRV()
 									: nullptr;
-								skinnedFactoryUserData->InstancePaletteOffsetSRV = instancePaletteOffsetSRV;
+								skinnedFactoryUserData->InstancePaletteOffsetSRV = baseInstancePaletteOffsetSRV;
 								skinnedFactoryUserData->SectionBoneMapSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
 									InCollector,
 									MakeArrayView(sectionBoneMap));
@@ -1225,7 +1266,7 @@ public:
 								skinnedFactoryUserData->SkinWeightStride = lodResources->DirectResources->SkinWeightStride;
 								skinnedFactoryUserData->SkinWeightBoneWeightsOffset =
 									lodResources->DirectResources->SkinWeightBoneWeightsOffset;
-								skinnedFactoryUserData->InstancePaletteOffsetCount = instancePaletteOffsets.Num();
+								skinnedFactoryUserData->InstancePaletteOffsetCount = baseInstancePaletteOffsets.Num();
 								skinnedFactoryUserData->SectionBoneMapCount = sectionBoneMap.Num();
 								skinnedFactoryUserData->bVariableBonesPerVertex =
 									lodResources->DirectResources->bVariableBonesPerVertex ? 1u : 0u;
@@ -1243,7 +1284,7 @@ public:
 							mesh.Type = PT_TriangleList;
 							mesh.DepthPriorityGroup = SDPG_World;
 							mesh.bCanApplyViewModeOverrides = true;
-							mesh.CastShadow = bCastShadowForLodDraw;
+							mesh.CastShadow = false;
 							mesh.bWireframe = bIsWireframeView;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 							mesh.VisualizeLODIndex = lodIndex;
@@ -1256,14 +1297,94 @@ public:
 							batchElement.MinVertexIndex = renderSection.BaseVertexIndex;
 							batchElement.MaxVertexIndex = renderSection.BaseVertexIndex + renderSection.NumVertices - 1;
 							batchElement.NumInstances = IntCastChecked<uint32>(visibleInstances.Num());
-							batchElement.DynamicPrimitiveData = dynamicPrimitiveData;
+							batchElement.DynamicPrimitiveData = baseDynamicPrimitiveData;
 							batchElement.UserData = skinnedFactoryUserData;
-							batchElement.PrimitiveUniformBufferResource = &dynamicPrimitiveUniformBuffer.UniformBuffer;
+							batchElement.PrimitiveUniformBufferResource = &baseDynamicPrimitiveUniformBuffer.UniformBuffer;
 
 							InCollector.AddMesh(viewIndex, mesh);
 							++frameStats.SubmittedDrawCalls;
 							++frameStats.SubmittedSections;
 							frameStats.SubmittedTriangles += renderSection.NumTriangles;
+
+							if (bSubmitShadowOnlyMesh
+								&& shadowDynamicPrimitiveData
+								&& shadowDynamicPrimitiveUniformBuffer
+								&& shadowWorldBounds.IsValid)
+							{
+								FOptimizedSkeletalMeshVertexFactoryUserData* shadowSkinnedFactoryUserData = nullptr;
+								if (bUseGpuSkinningForLOD)
+								{
+									TArray<uint32>& sectionBoneMap = InCollector.AllocateOneFrameResource<TArray<uint32>>();
+									sectionBoneMap.Reserve(renderSection.BoneMap.Num());
+									for (const FBoneIndexType boneIndex : renderSection.BoneMap)
+									{
+										sectionBoneMap.Add(static_cast<uint32>(boneIndex));
+									}
+
+									shadowSkinnedFactoryUserData =
+										&InCollector.AllocateOneFrameResource<FOptimizedSkeletalMeshVertexFactoryUserData>();
+									shadowSkinnedFactoryUserData->SkinWeightDataSRV =
+										lodResources->DirectResources->SkinWeightVertexBuffer->GetDataVertexBuffer()->GetSRV();
+									shadowSkinnedFactoryUserData->SkinWeightLookupSRV =
+										lodResources->DirectResources->SkinWeightVertexBuffer->GetLookupVertexBuffer()->GetSRV();
+									shadowSkinnedFactoryUserData->BonePaletteSRV =
+										BonePalettePooledBuffer
+										? const_cast<FRDGPooledBuffer*>(BonePalettePooledBuffer.GetReference())->GetSRV()
+										: nullptr;
+									shadowSkinnedFactoryUserData->InstancePaletteOffsetSRV = shadowInstancePaletteOffsetSRV;
+									shadowSkinnedFactoryUserData->SectionBoneMapSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
+										InCollector,
+										MakeArrayView(sectionBoneMap));
+									shadowSkinnedFactoryUserData->BonePaletteMatrixCount =
+										BonePalettePooledBuffer ? static_cast<uint32>(SkinningGPUPaletteMatrices) : 0u;
+									shadowSkinnedFactoryUserData->MaxBoneInfluences =
+										static_cast<uint32>(lodResources->DirectResources->MaxBoneInfluences);
+									shadowSkinnedFactoryUserData->BoneIndexByteSize = lodResources->DirectResources->BoneIndexByteSize;
+									shadowSkinnedFactoryUserData->BoneWeightByteSize = lodResources->DirectResources->BoneWeightByteSize;
+									shadowSkinnedFactoryUserData->SkinWeightStride = lodResources->DirectResources->SkinWeightStride;
+									shadowSkinnedFactoryUserData->SkinWeightBoneWeightsOffset =
+										lodResources->DirectResources->SkinWeightBoneWeightsOffset;
+									shadowSkinnedFactoryUserData->InstancePaletteOffsetCount = shadowInstancePaletteOffsets.Num();
+									shadowSkinnedFactoryUserData->SectionBoneMapCount = sectionBoneMap.Num();
+									shadowSkinnedFactoryUserData->bVariableBonesPerVertex =
+										lodResources->DirectResources->bVariableBonesPerVertex ? 1u : 0u;
+								}
+
+								FMeshBatch& shadowMesh = InCollector.AllocateMesh();
+								shadowMesh.VertexFactory =
+									bUseGpuSkinningForLOD
+									? static_cast<const FVertexFactory*>(&lodResources->DirectResources->SkinnedVertexFactory)
+									: static_cast<const FVertexFactory*>(&lodResources->DirectResources->VertexFactory);
+								shadowMesh.MaterialRenderProxy = MaterialRenderProxy;
+								shadowMesh.ReverseCulling = false;
+								shadowMesh.Type = PT_TriangleList;
+								shadowMesh.DepthPriorityGroup = SDPG_World;
+								shadowMesh.bCanApplyViewModeOverrides = true;
+								shadowMesh.CastShadow = true;
+								shadowMesh.bWireframe = bIsWireframeView;
+								shadowMesh.bUseForMaterial = false;
+								shadowMesh.bUseForDepthPass = false;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+								shadowMesh.VisualizeLODIndex = lodIndex;
+#endif
+
+								FMeshBatchElement& shadowBatchElement = shadowMesh.Elements[0];
+								shadowBatchElement.IndexBuffer = lodResources->LODRenderData->MultiSizeIndexContainer.GetIndexBuffer();
+								shadowBatchElement.FirstIndex = renderSection.BaseIndex;
+								shadowBatchElement.NumPrimitives = renderSection.NumTriangles;
+								shadowBatchElement.MinVertexIndex = renderSection.BaseVertexIndex;
+								shadowBatchElement.MaxVertexIndex = renderSection.BaseVertexIndex + renderSection.NumVertices - 1;
+								shadowBatchElement.NumInstances = IntCastChecked<uint32>(shadowVisibleInstances.Num());
+								shadowBatchElement.DynamicPrimitiveData = shadowDynamicPrimitiveData;
+								shadowBatchElement.UserData = shadowSkinnedFactoryUserData;
+								shadowBatchElement.PrimitiveUniformBufferResource =
+									&shadowDynamicPrimitiveUniformBuffer->UniformBuffer;
+
+								InCollector.AddMesh(viewIndex, shadowMesh);
+								++frameStats.SubmittedDrawCalls;
+								++frameStats.SubmittedSections;
+								frameStats.SubmittedTriangles += renderSection.NumTriangles;
+							}
 						}
 					}
 
@@ -1313,6 +1434,15 @@ public:
 						instance,
 						batch.lodResources.Num());
 					++frameStats.VisibleInstances;
+					const bool bInstanceShadowVisible = OptimizedSkeletalMesh::ShouldCastShadowForInstance(
+						*InViews[viewIndex],
+						instance,
+						bCastShadows,
+						MaxShadowCastDistance);
+					if (bInstanceShadowVisible)
+					{
+						++frameStats.ShadowVisibleInstances;
+					}
 					const OptimizedSkeletalMesh::FLODResources* lodResources =
 						batch.lodResources.IsValidIndex(chosenLodIndex)
 						? batch.lodResources[chosenLodIndex].Get()
@@ -1393,12 +1523,7 @@ public:
 								mesh.Type = PT_TriangleList;
 								mesh.DepthPriorityGroup = SDPG_World;
 								mesh.bCanApplyViewModeOverrides = true;
-								mesh.CastShadow = !bIsWireframeView
-									&& OptimizedSkeletalMesh::ShouldCastShadowForInstance(
-										*InViews[viewIndex],
-										instance,
-										bCastShadows,
-										MaxShadowCastDistance);
+								mesh.CastShadow = !bIsWireframeView && bInstanceShadowVisible;
 								mesh.bWireframe = bIsWireframeView;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 								mesh.VisualizeLODIndex = chosenLodIndex;
@@ -1783,6 +1908,7 @@ void UOptimizedSkeletalMeshRenderComponent::ApplyRenderStats_GameThread(
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshMeshBatches, InStats.MeshBatches);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshTestedInstances, InStats.TestedInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshVisibleInstances, InStats.VisibleInstances);
+	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshShadowVisibleInstances, InStats.ShadowVisibleInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshCulledInstances, InStats.CulledInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshDrawnInstances, InStats.DrawnInstances);
 	SET_DWORD_STAT(STAT_OptimizedSkeletalMeshSubmittedDrawCalls, InStats.SubmittedDrawCalls);
