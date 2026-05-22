@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Curves/CurveFloat.h"
 #include "Engine/DeveloperSettings.h"
+#include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
 #include "OptimizedSkeletalMeshSettings.generated.h"
 
 UENUM(BlueprintType)
@@ -42,6 +43,10 @@ class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshSettings : public UDevelop
 public:
 #pragma region UDeveloperSettings
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
+	virtual void PostInitProperties() override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& InPropertyChangedEvent) override;
+#endif
 #pragma endregion
 
 #pragma region Animation
@@ -68,6 +73,33 @@ public:
 #pragma endregion
 
 #pragma region Rendering
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
+	bool bDrawDebugBounds = false;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
+	bool bDrawMeshSections = true;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
+	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
+	bool bEnableInstanceFrustumCulling = true;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "1.0"))
+	float InstanceCullBoundsScale = 1.5f;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
+	bool bUseConservativeProxyBounds = true;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "1000.0"))
+	float ConservativeProxyBoundsExtent = 10000000.0f;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
+	bool bDrawCullingDebug = false;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
+	bool bDrawCullTestBounds = false;
+
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering")
 	bool bCastShadows = true;
 

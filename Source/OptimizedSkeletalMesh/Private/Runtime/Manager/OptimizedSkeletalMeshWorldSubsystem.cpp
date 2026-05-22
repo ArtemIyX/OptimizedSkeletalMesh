@@ -46,93 +46,212 @@ DECLARE_FLOAT_COUNTER_STAT(TEXT("Last Delta Seconds"), STAT_OptimizedSkeletalMes
 namespace OptimizedSkeletalMesh
 {
 	static FThreadSafeCounter RenderCVarChangeVersion;
+	static bool bRenderSettingsSyncInProgress = false;
+	static bool bEnableSettingsBackSync = false;
 
-	static void OnRenderOverrideCVarsChanged()
+	static void SetConsoleInt(const TCHAR* InName, const int32 InValue)
 	{
+		if (IConsoleVariable* cvar = IConsoleManager::Get().FindConsoleVariable(InName))
+		{
+			cvar->Set(InValue, ECVF_SetByCode);
+		}
+	}
+
+	static void SetConsoleFloat(const TCHAR* InName, const float InValue)
+	{
+		if (IConsoleVariable* cvar = IConsoleManager::Get().FindConsoleVariable(InName))
+		{
+			cvar->Set(InValue, ECVF_SetByCode);
+		}
+	}
+
+	static void SyncSettingsFromRenderCVars()
+	{
+		if (bRenderSettingsSyncInProgress || !bEnableSettingsBackSync)
+		{
+			return;
+		}
+
+		UOptimizedSkeletalMeshSettings* settings = GetMutableDefault<UOptimizedSkeletalMeshSettings>();
+		if (!settings)
+		{
+			return;
+		}
+
+		TGuardValue<bool> syncGuard(bRenderSettingsSyncInProgress, true);
+		auto getInt = [](const TCHAR* InName, const int32 InFallback) {
+			if (IConsoleVariable* cvar = IConsoleManager::Get().FindConsoleVariable(InName))
+			{
+				return cvar->GetInt();
+			}
+
+			return InFallback;
+		};
+		auto getFloat = [](const TCHAR* InName, const float InFallback) {
+			if (IConsoleVariable* cvar = IConsoleManager::Get().FindConsoleVariable(InName))
+			{
+				return cvar->GetFloat();
+			}
+
+			return InFallback;
+		};
+
+		settings->bDrawDebugBounds = getInt(TEXT("osm.Render.DrawDebugBounds"), 0) != 0;
+		settings->bDrawMeshSections = getInt(TEXT("osm.Render.DrawMeshSections"), 1) != 0;
+		settings->MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
+			FMath::Clamp(getInt(TEXT("osm.Render.DrawMode"), 3), 0, 3));
+		settings->bEnableInstanceFrustumCulling = getInt(TEXT("osm.Render.InstanceFrustumCulling"), 1) != 0;
+		settings->InstanceCullBoundsScale = FMath::Max(1.0f, getFloat(TEXT("osm.Render.InstanceCullBoundsScale"), 1.5f));
+		settings->bUseConservativeProxyBounds = getInt(TEXT("osm.Render.UseConservativeProxyBounds"), 1) != 0;
+		settings->ConservativeProxyBoundsExtent =
+			FMath::Max(1000.0f, getFloat(TEXT("osm.Render.ConservativeProxyBoundsExtent"), 10000000.0f));
+		settings->bDrawCullingDebug = getInt(TEXT("osm.Render.DrawCullingDebug"), 0) != 0;
+		settings->bDrawCullTestBounds = getInt(TEXT("osm.Render.DrawCullTestBounds"), 0) != 0;
+		settings->bCastShadows = getInt(TEXT("osm.Render.CastShadows"), 1) != 0;
+		settings->MaxShadowCastDistance = FMath::Max(0.0f, getFloat(TEXT("osm.Render.MaxShadowCastDistance"), 5000.0f));
+#if WITH_EDITOR
+		settings->SaveConfig();
+#endif
+	}
+
+	static void PushRenderSettingsToCVars(const FOptimizedSkeletalMeshRenderSettings& InSettings)
+	{
+		if (bRenderSettingsSyncInProgress)
+		{
+			return;
+		}
+
+		TGuardValue<bool> syncGuard(bRenderSettingsSyncInProgress, true);
+		const int32 drawMode = FMath::Clamp(static_cast<int32>(InSettings.MeshDrawMode), 0, 3);
+		SetConsoleInt(TEXT("osm.Render.DrawDebugBounds"), InSettings.bDrawDebugBounds ? 1 : 0);
+		SetConsoleInt(TEXT("osm.Render.DrawMeshSections"), InSettings.bDrawMeshSections ? 1 : 0);
+		SetConsoleInt(TEXT("osm.Render.DrawMode"), drawMode);
+		SetConsoleInt(
+			TEXT("osm.Render.InstanceFrustumCulling"),
+			InSettings.bEnableInstanceFrustumCulling ? 1 : 0);
+		SetConsoleFloat(TEXT("osm.Render.InstanceCullBoundsScale"), FMath::Max(1.0f, InSettings.InstanceCullBoundsScale));
+		SetConsoleInt(
+			TEXT("osm.Render.UseConservativeProxyBounds"),
+			InSettings.bUseConservativeProxyBounds ? 1 : 0);
+		SetConsoleFloat(
+			TEXT("osm.Render.ConservativeProxyBoundsExtent"),
+			FMath::Max(1000.0f, InSettings.ConservativeProxyBoundsExtent));
+		SetConsoleInt(TEXT("osm.Render.DrawCullingDebug"), InSettings.bDrawCullingDebug ? 1 : 0);
+		SetConsoleInt(TEXT("osm.Render.DrawCullTestBounds"), InSettings.bDrawCullTestBounds ? 1 : 0);
+		SetConsoleInt(TEXT("osm.Render.CastShadows"), InSettings.bCastShadows ? 1 : 0);
+		SetConsoleFloat(TEXT("osm.Render.MaxShadowCastDistance"), FMath::Max(0.0f, InSettings.MaxShadowCastDistance));
+	}
+
+	static FOptimizedSkeletalMeshRenderSettings BuildRenderSettingsFromProjectSettings()
+	{
+		FOptimizedSkeletalMeshRenderSettings settings;
+		if (const UOptimizedSkeletalMeshSettings* projectSettings = GetDefault<UOptimizedSkeletalMeshSettings>())
+		{
+			settings.bDrawDebugBounds = projectSettings->bDrawDebugBounds;
+			settings.bDrawMeshSections = projectSettings->bDrawMeshSections;
+			settings.MeshDrawMode = projectSettings->MeshDrawMode;
+			settings.bEnableInstanceFrustumCulling = projectSettings->bEnableInstanceFrustumCulling;
+			settings.InstanceCullBoundsScale = projectSettings->InstanceCullBoundsScale;
+			settings.bUseConservativeProxyBounds = projectSettings->bUseConservativeProxyBounds;
+			settings.ConservativeProxyBoundsExtent = projectSettings->ConservativeProxyBoundsExtent;
+			settings.bDrawCullingDebug = projectSettings->bDrawCullingDebug;
+			settings.bDrawCullTestBounds = projectSettings->bDrawCullTestBounds;
+			settings.bCastShadows = projectSettings->bCastShadows;
+			settings.MaxShadowCastDistance = projectSettings->MaxShadowCastDistance;
+		}
+
+		settings.InstanceCullBoundsScale = FMath::Max(1.0f, settings.InstanceCullBoundsScale);
+		settings.ConservativeProxyBoundsExtent = FMath::Max(1000.0f, settings.ConservativeProxyBoundsExtent);
+		settings.MaxShadowCastDistance = FMath::Max(0.0f, settings.MaxShadowCastDistance);
+		settings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
+			FMath::Clamp(static_cast<int32>(settings.MeshDrawMode), 0, 3));
+		return settings;
+	}
+
+	static void OnRenderCVarsChanged()
+	{
+		SyncSettingsFromRenderCVars();
 		RenderCVarChangeVersion.Increment();
 	}
 
+	static void SetSettingsBackSyncEnabled(const bool bInEnabled)
+	{
+		bEnableSettingsBackSync = bInEnabled;
+	}
+
 	static FAutoConsoleVariableSink RenderCVarSink(
-		FConsoleCommandDelegate::CreateStatic(&OnRenderOverrideCVarsChanged));
+		FConsoleCommandDelegate::CreateStatic(&OnRenderCVarsChanged));
 
 	static int32 GetRenderCVarChangeVersion()
 	{
 		return RenderCVarChangeVersion.GetValue();
 	}
 
-	static TAutoConsoleVariable<int32> CVarRenderOverrideEnabled(
-		TEXT("osm.Render.OverrideEnabled"),
-		0,
-		TEXT("Enable global render settings override for OptimizedSkeletalMesh.\n")
-		TEXT("0: use subsystem profile settings\n")
-		TEXT("1: override from osm.Render.* cvars"),
-		ECVF_Default);
-
 	static TAutoConsoleVariable<int32> CVarRenderDrawDebugBounds(
 		TEXT("osm.Render.DrawDebugBounds"),
-		1,
-		TEXT("Override bDrawDebugBounds when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		0,
+		TEXT("bDrawDebugBounds.\n0: false, 1: true"),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarRenderDrawMeshSections(
 		TEXT("osm.Render.DrawMeshSections"),
 		1,
-		TEXT("Override bDrawMeshSections when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		TEXT("bDrawMeshSections.\n0: false, 1: true"),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarRenderDrawMode(
 		TEXT("osm.Render.DrawMode"),
-		static_cast<int32>(EOptimizedSkeletalMeshDrawMode::DynamicMeshProof),
-		TEXT("Override MeshDrawMode when osm.Render.OverrideEnabled=1.\n")
+		static_cast<int32>(EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced),
+		TEXT("MeshDrawMode.\n")
 		TEXT("0: DynamicMeshProof, 1: DirectMeshPerInstance, 2: DirectMeshInstanced, 3: GpuSkinnedInstanced"),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarRenderInstanceFrustumCulling(
 		TEXT("osm.Render.InstanceFrustumCulling"),
 		1,
-		TEXT("Override bEnableInstanceFrustumCulling when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		TEXT("bEnableInstanceFrustumCulling.\n0: false, 1: true"),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<float> CVarRenderInstanceCullBoundsScale(
 		TEXT("osm.Render.InstanceCullBoundsScale"),
 		1.5f,
-		TEXT("Override InstanceCullBoundsScale when osm.Render.OverrideEnabled=1."),
+		TEXT("InstanceCullBoundsScale."),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarRenderUseConservativeProxyBounds(
 		TEXT("osm.Render.UseConservativeProxyBounds"),
 		1,
-		TEXT("Override bUseConservativeProxyBounds when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		TEXT("bUseConservativeProxyBounds.\n0: false, 1: true"),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<float> CVarRenderConservativeProxyBoundsExtent(
 		TEXT("osm.Render.ConservativeProxyBoundsExtent"),
 		10000000.0f,
-		TEXT("Override ConservativeProxyBoundsExtent when osm.Render.OverrideEnabled=1."),
+		TEXT("ConservativeProxyBoundsExtent."),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarRenderDrawCullingDebug(
 		TEXT("osm.Render.DrawCullingDebug"),
 		0,
-		TEXT("Override bDrawCullingDebug when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		TEXT("bDrawCullingDebug.\n0: false, 1: true"),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarRenderDrawCullTestBounds(
 		TEXT("osm.Render.DrawCullTestBounds"),
-		1,
-		TEXT("Override bDrawCullTestBounds when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		0,
+		TEXT("bDrawCullTestBounds.\n0: false, 1: true"),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarRenderCastShadows(
 		TEXT("osm.Render.CastShadows"),
 		1,
-		TEXT("Override bCastShadows when osm.Render.OverrideEnabled=1.\n0: false, 1: true"),
+		TEXT("bCastShadows.\n0: false, 1: true"),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<float> CVarRenderMaxShadowCastDistance(
 		TEXT("osm.Render.MaxShadowCastDistance"),
 		5000.0f,
-		TEXT("Override MaxShadowCastDistance when osm.Render.OverrideEnabled=1.\n<= 0 means no distance limit."),
+		TEXT("MaxShadowCastDistance.\n<= 0 means no distance limit."),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarAnimationMaxDirtyEvaluationsPerFrame(
@@ -153,16 +272,9 @@ namespace OptimizedSkeletalMesh
 		return normalizedSettings;
 	}
 
-	static FOptimizedSkeletalMeshRenderSettings ResolveRenderSettingsWithCVars(
-		const FOptimizedSkeletalMeshRenderSettings& InProfileSettings)
+	static FOptimizedSkeletalMeshRenderSettings ResolveRenderSettingsFromCVars()
 	{
-		FOptimizedSkeletalMeshRenderSettings resolvedSettings = InProfileSettings;
-
-		if (CVarRenderOverrideEnabled.GetValueOnGameThread() == 0)
-		{
-			return NormalizeRenderSettings(resolvedSettings);
-		}
-
+		FOptimizedSkeletalMeshRenderSettings resolvedSettings;
 		resolvedSettings.bDrawDebugBounds = CVarRenderDrawDebugBounds.GetValueOnGameThread() != 0;
 		resolvedSettings.bDrawMeshSections = CVarRenderDrawMeshSections.GetValueOnGameThread() != 0;
 		resolvedSettings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
@@ -240,6 +352,7 @@ namespace OptimizedSkeletalMesh
 void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& InCollection)
 {
 	Super::Initialize(InCollection);
+	OptimizedSkeletalMesh::SetSettingsBackSyncEnabled(true);
 
 	Instances.Reset();
 	FreeInstanceIds.Reset();
@@ -257,12 +370,8 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	bRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
-	CurrentRenderSettings = FOptimizedSkeletalMeshRenderSettings();
-	if (const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>())
-	{
-		CurrentRenderSettings.bCastShadows = settings->bCastShadows;
-		CurrentRenderSettings.MaxShadowCastDistance = settings->MaxShadowCastDistance;
-	}
+	CurrentRenderSettings = OptimizedSkeletalMesh::BuildRenderSettingsFromProjectSettings();
+	OptimizedSkeletalMesh::PushRenderSettingsToCVars(CurrentRenderSettings);
 	ActiveRenderSettings = CurrentRenderSettings;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 	RefreshActiveRenderSettings(true);
@@ -271,6 +380,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 
 void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 {
+	OptimizedSkeletalMesh::SetSettingsBackSyncEnabled(false);
 	DestroyRenderBridge();
 
 	Instances.Reset();
@@ -289,12 +399,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	bRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
-	CurrentRenderSettings = FOptimizedSkeletalMeshRenderSettings();
-	if (const UOptimizedSkeletalMeshSettings* settings = GetDefault<UOptimizedSkeletalMeshSettings>())
-	{
-		CurrentRenderSettings.bCastShadows = settings->bCastShadows;
-		CurrentRenderSettings.MaxShadowCastDistance = settings->MaxShadowCastDistance;
-	}
+	CurrentRenderSettings = OptimizedSkeletalMesh::BuildRenderSettingsFromProjectSettings();
 	ActiveRenderSettings = CurrentRenderSettings;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 
@@ -720,12 +825,13 @@ FOptimizedSkeletalMeshRenderStats UOptimizedSkeletalMeshWorldSubsystem::GetLastR
 void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
 {
 	CurrentRenderSettings = OptimizedSkeletalMesh::NormalizeRenderSettings(InSettings);
+	OptimizedSkeletalMesh::PushRenderSettingsToCVars(CurrentRenderSettings);
 	RefreshActiveRenderSettings(true);
 }
 
 FOptimizedSkeletalMeshRenderSettings UOptimizedSkeletalMeshWorldSubsystem::GetRenderSettings() const
 {
-	return CurrentRenderSettings;
+	return OptimizedSkeletalMesh::ResolveRenderSettingsFromCVars();
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::ReloadRenderSettingsFromCVars()
@@ -1001,8 +1107,8 @@ void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent()
 
 void UOptimizedSkeletalMeshWorldSubsystem::RefreshActiveRenderSettings(const bool bInForce)
 {
-	const FOptimizedSkeletalMeshRenderSettings resolvedSettings =
-		OptimizedSkeletalMesh::ResolveRenderSettingsWithCVars(CurrentRenderSettings);
+	const FOptimizedSkeletalMeshRenderSettings resolvedSettings = OptimizedSkeletalMesh::ResolveRenderSettingsFromCVars();
+	CurrentRenderSettings = resolvedSettings;
 
 	if (!bInForce && OptimizedSkeletalMesh::AreRenderSettingsEqual(ActiveRenderSettings, resolvedSettings))
 	{
