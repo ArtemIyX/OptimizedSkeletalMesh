@@ -442,7 +442,9 @@ private:
 	int32 BulkUpdateDepth = 0;
 	int32 LastSeenRenderCVarVersion = 0;
 	int32 RenderStateRecoveryAttempts = 0;
+	mutable int32 CachedVisibleRenderBatchCount = 0;
 	bool bRenderDataDirty = false;
+	mutable bool bVisibleRenderBatchCountDirty = true;
 	bool bExternalRenderBridgeActive = false;
 	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;
 	FOptimizedSkeletalMeshRenderStats LastRenderStats;

@@ -972,6 +972,11 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::GetInstanceCount() const
 
 int32 UOptimizedSkeletalMeshWorldSubsystem::GetVisibleRenderBatchCount() const
 {
+	if (!bVisibleRenderBatchCountDirty)
+	{
+		return CachedVisibleRenderBatchCount;
+	}
+
 	TSet<USkeletalMesh*> visibleMeshes;
 
 	for (const TPair<int32, FOptimizedSkeletalMeshInstanceDesc>& pair : Instances)
@@ -985,7 +990,9 @@ int32 UOptimizedSkeletalMeshWorldSubsystem::GetVisibleRenderBatchCount() const
 		visibleMeshes.Add(desc.SkeletalMesh.Get());
 	}
 
-	return visibleMeshes.Num();
+	CachedVisibleRenderBatchCount = visibleMeshes.Num();
+	bVisibleRenderBatchCountDirty = false;
+	return CachedVisibleRenderBatchCount;
 }
 
 FOptimizedSkeletalMeshAnimationStats UOptimizedSkeletalMeshWorldSubsystem::GetLastAnimationStats() const
@@ -1327,6 +1334,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::IsValidInstanceId(const int32 InInsta
 void UOptimizedSkeletalMeshWorldSubsystem::MarkRenderDataDirty()
 {
 	bRenderDataDirty = true;
+	bVisibleRenderBatchCountDirty = true;
 
 	if (RenderComponent && BulkUpdateDepth <= 0)
 	{
