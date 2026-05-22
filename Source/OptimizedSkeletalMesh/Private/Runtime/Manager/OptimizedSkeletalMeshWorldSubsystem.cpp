@@ -580,7 +580,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	Instances.Reset();
 	FreeInstanceIds.Reset();
 	AnimationMeshCaches.Reset();
+	PreviousInstanceBonePalettes.Reset();
 	InstanceBonePalettes.Reset();
+	InstanceAnimationBlendAlphas.Reset();
 	ActiveAnimationInstanceIds.Reset();
 	DirtyAnimationInstanceIds.Reset();
 	DirtyBonePaletteInstanceIds.Reset();
@@ -609,7 +611,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	Instances.Reset();
 	FreeInstanceIds.Reset();
 	AnimationMeshCaches.Reset();
+	PreviousInstanceBonePalettes.Reset();
 	InstanceBonePalettes.Reset();
+	InstanceAnimationBlendAlphas.Reset();
 	ActiveAnimationInstanceIds.Reset();
 	DirtyAnimationInstanceIds.Reset();
 	DirtyBonePaletteInstanceIds.Reset();
@@ -721,7 +725,9 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UnregisterInstance(FOptimizedSkeletal
 	}
 
 	Instances.Remove(InHandle.Id);
+	PreviousInstanceBonePalettes.Remove(InHandle.Id);
 	InstanceBonePalettes.Remove(InHandle.Id);
+	InstanceAnimationBlendAlphas.Remove(InHandle.Id);
 	RemoveAnimationTracking(InHandle.Id);
 	MarkBonePaletteDirty(InHandle.Id);
 	FreeInstanceIds.Add(InHandle.Id);
@@ -1269,6 +1275,17 @@ const TArray<FMatrix44f>* UOptimizedSkeletalMeshWorldSubsystem::GetInstanceBoneP
 	return InstanceBonePalettes.Find(InHandle.Id);
 }
 
+float UOptimizedSkeletalMeshWorldSubsystem::GetInstanceAnimationBlendAlpha(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle) const
+{
+	if (const float* blendAlpha = InstanceAnimationBlendAlphas.Find(InHandle.Id))
+	{
+		return FMath::Clamp(*blendAlpha, 0.0f, 1.0f);
+	}
+
+	return 1.0f;
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::GetBonePaletteSnapshots(
 	TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& OutSnapshots) const
 {
@@ -1283,7 +1300,17 @@ void UOptimizedSkeletalMeshWorldSubsystem::GetBonePaletteSnapshots(
 
 		FOptimizedSkeletalMeshBonePaletteSnapshot& snapshot = OutSnapshots.AddDefaulted_GetRef();
 		snapshot.Handle = FOptimizedSkeletalMeshInstanceHandle(pair.Key);
+		if (const TArray<FMatrix44f>* previousBonePalette = PreviousInstanceBonePalettes.Find(pair.Key))
+		{
+			snapshot.PreviousBonePalette = *previousBonePalette;
+		}
+		else
+		{
+			snapshot.PreviousBonePalette = pair.Value;
+		}
+
 		snapshot.BonePalette = pair.Value;
+		snapshot.BlendAlpha = GetInstanceAnimationBlendAlpha(FOptimizedSkeletalMeshInstanceHandle(pair.Key));
 	}
 
 	OutSnapshots.Sort(
@@ -1538,6 +1565,8 @@ void UOptimizedSkeletalMeshWorldSubsystem::RemoveAnimationTracking(const int32 I
 	DirtyAnimationInstanceIds.Remove(InInstanceId);
 	DirtyBonePaletteInstanceIds.Remove(InInstanceId);
 	RenderVisibleInstanceIds.Remove(InInstanceId);
+	PreviousInstanceBonePalettes.Remove(InInstanceId);
+	InstanceAnimationBlendAlphas.Remove(InInstanceId);
 	AnimationUpdateAccumulators.Remove(InInstanceId);
 }
 
@@ -1875,6 +1904,8 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 				accumulator += InDeltaTime;
 				if (accumulator < updateInterval && !bShouldEvaluate)
 				{
+					InstanceAnimationBlendAlphas.FindOrAdd(instanceId) = FMath::Clamp(accumulator / updateInterval, 0.0f, 1.0f);
+					MarkBonePaletteDirty(instanceId);
 					++newStats.SkippedUpdateRateInstances;
 					continue;
 				}
@@ -1988,16 +2019,28 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 		if (result.bSucceeded)
 		{
 			++newStats.PoseEvaluatedInstances;
+			if (const TArray<FMatrix44f>* currentBonePalette = InstanceBonePalettes.Find(result.InstanceId))
+			{
+				PreviousInstanceBonePalettes.FindOrAdd(result.InstanceId) = *currentBonePalette;
+			}
+			else
+			{
+				PreviousInstanceBonePalettes.FindOrAdd(result.InstanceId) = result.BonePalette;
+			}
+
 			TArray<FMatrix44f>& bonePalette = InstanceBonePalettes.FindOrAdd(result.InstanceId);
 			bonePalette = MoveTemp(result.BonePalette);
+			InstanceAnimationBlendAlphas.FindOrAdd(result.InstanceId) = 0.0f;
 			MarkBonePaletteDirty(result.InstanceId);
 		}
 		else
 		{
+			PreviousInstanceBonePalettes.Remove(result.InstanceId);
 			if (InstanceBonePalettes.Remove(result.InstanceId) > 0)
 			{
 				MarkBonePaletteDirty(result.InstanceId);
 			}
+			InstanceAnimationBlendAlphas.Remove(result.InstanceId);
 			++newStats.FailedPoseEvaluations;
 		}
 	}

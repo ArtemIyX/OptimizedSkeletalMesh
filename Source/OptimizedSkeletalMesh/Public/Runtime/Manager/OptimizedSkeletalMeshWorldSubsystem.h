@@ -171,7 +171,9 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceSnapshot
 struct FOptimizedSkeletalMeshBonePaletteSnapshot
 {
 	FOptimizedSkeletalMeshInstanceHandle Handle;
+	TArray<FMatrix44f> PreviousBonePalette;
 	TArray<FMatrix44f> BonePalette;
+	float BlendAlpha = 1.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -402,6 +404,7 @@ public:
 	void ApplyRenderSettingsToComponent(UOptimizedSkeletalMeshRenderComponent* InComponent) const;
 
 	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle InHandle) const;
+	float GetInstanceAnimationBlendAlpha(FOptimizedSkeletalMeshInstanceHandle InHandle) const;
 	void GetBonePaletteSnapshots(TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& OutSnapshots) const;
 	void UpdateRenderVisibleInstanceIds(TConstArrayView<int32> InVisibleInstanceIds);
 	void UpdateLastRenderStats(const FOptimizedSkeletalMeshRenderStats& InStats);
@@ -483,7 +486,9 @@ private:
 	TObjectPtr<UOptimizedSkeletalMeshRenderComponent> RenderComponent = nullptr;
 
 	TMap<TObjectKey<USkeletalMesh>, FOptimizedSkeletalMeshAnimationMeshCache> AnimationMeshCaches;
+	TMap<int32, TArray<FMatrix44f>> PreviousInstanceBonePalettes;
 	TMap<int32, TArray<FMatrix44f>> InstanceBonePalettes;
+	TMap<int32, float> InstanceAnimationBlendAlphas;
 	TSet<int32> ActiveAnimationInstanceIds;
 	TSet<int32> DirtyAnimationInstanceIds;
 	TSet<int32> DirtyBonePaletteInstanceIds;

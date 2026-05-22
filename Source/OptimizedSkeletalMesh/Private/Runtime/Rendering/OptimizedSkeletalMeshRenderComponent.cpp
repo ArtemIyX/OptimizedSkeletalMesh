@@ -258,7 +258,9 @@ namespace OptimizedSkeletalMesh
 	struct FBonePaletteRenderSnapshot
 	{
 		int32 InstanceId = INDEX_NONE;
+		TArray<FMatrix44f> PreviousBonePalette;
 		TArray<FMatrix44f> BonePalette;
+		float BlendAlpha = 1.0f;
 	};
 
 	struct FBonePaletteRange
@@ -1915,13 +1917,45 @@ public:
 				continue;
 			}
 
+			const int32 previousBoneCount = snapshot.PreviousBonePalette.Num();
+			const bool bCanBlend =
+				previousBoneCount == boneCount
+				&& snapshot.BlendAlpha > 0.0f
+				&& snapshot.BlendAlpha < 1.0f;
+			const float blendAlpha = FMath::Clamp(snapshot.BlendAlpha, 0.0f, 1.0f);
+			const float inverseBlendAlpha = 1.0f - blendAlpha;
+
 			const uint32 paletteOffset = static_cast<uint32>(PackedBonePalettes.Num());
 			OptimizedSkeletalMesh::FBonePaletteRange range;
 			range.Offset = paletteOffset;
 			range.boneCount = static_cast<uint32>(boneCount);
 			BonePaletteRangesByInstanceId.Add(snapshot.InstanceId, range);
 
-			PackedBonePalettes.Append(snapshot.BonePalette);
+			if (bCanBlend)
+			{
+				for (int32 boneIndex = 0; boneIndex < boneCount; ++boneIndex)
+				{
+					const FMatrix44f& previousBone = snapshot.PreviousBonePalette[boneIndex];
+					const FMatrix44f& currentBone = snapshot.BonePalette[boneIndex];
+					FMatrix44f blendedBone = currentBone;
+					for (int32 rowIndex = 0; rowIndex < 4; ++rowIndex)
+					{
+						for (int32 columnIndex = 0; columnIndex < 4; ++columnIndex)
+						{
+							blendedBone.M[rowIndex][columnIndex] =
+								previousBone.M[rowIndex][columnIndex] * inverseBlendAlpha
+								+ currentBone.M[rowIndex][columnIndex] * blendAlpha;
+						}
+					}
+
+					PackedBonePalettes.Add(blendedBone);
+				}
+			}
+			else
+			{
+				PackedBonePalettes.Append(snapshot.BonePalette);
+			}
+
 			SkinningPaletteMatrices += boneCount;
 			SkinningPaletteBytes += boneCount * sizeof(FMatrix44f);
 			BonePalettesByInstanceId.Add(snapshot.InstanceId, MoveTemp(snapshot.BonePalette));
@@ -2346,7 +2380,9 @@ bool UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
 
 		OptimizedSkeletalMesh::FBonePaletteRenderSnapshot& renderSnapshot = renderSnapshots.AddDefaulted_GetRef();
 		renderSnapshot.InstanceId = snapshot.Handle.Id;
+		renderSnapshot.PreviousBonePalette = MoveTemp(snapshot.PreviousBonePalette);
 		renderSnapshot.BonePalette = MoveTemp(snapshot.BonePalette);
+		renderSnapshot.BlendAlpha = FMath::Clamp(snapshot.BlendAlpha, 0.0f, 1.0f);
 	}
 
 	FOptimizedSkeletalMeshSceneProxy* optimizedSceneProxy =
