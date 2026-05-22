@@ -403,6 +403,20 @@ namespace OptimizedSkeletalMesh
 		TEXT("<= 0 means no limit."),
 		ECVF_Default);
 
+	static TAutoConsoleVariable<int32> CVarAnimationPauseCpuPoseWhenNotVisible(
+		TEXT("osm.Animation.PauseCpuPoseWhenNotVisible"),
+		1,
+		TEXT("Skip CPU pose eval for non-render-visible instances and only advance animation time.\n")
+		TEXT("0: disabled, 1: enabled."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<float> CVarAnimationInvisiblePoseTickRateHz(
+		TEXT("osm.Animation.InvisiblePoseTickRateHz"),
+		0.0f,
+		TEXT("Optional tick rate used while instance is non-render-visible.\n")
+		TEXT("<= 0 means advance time every frame without CPU pose eval."),
+		ECVF_Default);
+
 	static FOptimizedSkeletalMeshRenderSettings NormalizeRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings)
 	{
 		FOptimizedSkeletalMeshRenderSettings normalizedSettings = InSettings;
@@ -1144,6 +1158,12 @@ void UOptimizedSkeletalMeshWorldSubsystem::UpdateRenderVisibleInstanceIds(
 		{
 			MarkBonePaletteDirty(instanceId);
 		}
+
+		if (!RenderVisibleInstanceIds.Contains(instanceId))
+		{
+			DirtyAnimationInstanceIds.Add(instanceId);
+			AnimationUpdateAccumulators.Remove(instanceId);
+		}
 	}
 
 	RenderVisibleInstanceIds = MoveTemp(newVisibleInstanceIds);
@@ -1611,6 +1631,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 
 	TArray<OptimizedSkeletalMesh::FAnimationEvaluationWork> evaluationWork;
 	evaluationWork.Reserve(instanceIdsToProcess.Num());
+	const bool bPauseCpuPoseWhenNotVisible =
+		OptimizedSkeletalMesh::CVarAnimationPauseCpuPoseWhenNotVisible.GetValueOnGameThread() != 0;
+	const float invisiblePoseTickRateHz = FMath::Max(
+		0.0f,
+		OptimizedSkeletalMesh::CVarAnimationInvisiblePoseTickRateHz.GetValueOnGameThread());
 
 	for (const int32 instanceId : instanceIdsToProcess)
 	{
@@ -1637,6 +1662,61 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 		if (ActiveAnimationInstanceIds.Contains(instanceId))
 		{
 			float animationDeltaTime = InDeltaTime;
+			const bool bRenderVisible = RenderVisibleInstanceIds.Contains(instanceId);
+			if (bPauseCpuPoseWhenNotVisible && !bRenderVisible)
+			{
+				if (invisiblePoseTickRateHz > 0.0f)
+				{
+					const float updateInterval = 1.0f / invisiblePoseTickRateHz;
+					float& accumulator = AnimationUpdateAccumulators.FindOrAdd(instanceId);
+					accumulator += InDeltaTime;
+					if (accumulator < updateInterval)
+					{
+						++newStats.SkippedUpdateRateInstances;
+						continue;
+					}
+
+					animationDeltaTime = accumulator;
+					accumulator = 0.0f;
+				}
+				else
+				{
+					AnimationUpdateAccumulators.Remove(instanceId);
+				}
+
+				if (animationDeltaTime > 0.0f)
+				{
+					const float sequenceLength = desc->Animation->GetPlayLength();
+					if (sequenceLength > 0.0f)
+					{
+						const float previousTime = desc->AnimationTime;
+						const float advancedTime = previousTime + animationDeltaTime * desc->AnimationPlayRate;
+
+						if (desc->bLoopAnimation)
+						{
+							desc->AnimationTime = WrapAnimationTime(advancedTime, sequenceLength);
+						}
+						else
+						{
+							desc->AnimationTime = FMath::Clamp(advancedTime, 0.0f, sequenceLength);
+							if (desc->AnimationTime <= 0.0f || desc->AnimationTime >= sequenceLength)
+							{
+								desc->bPlayAnimation = false;
+								ActiveAnimationInstanceIds.Remove(instanceId);
+								++newStats.FinishedInstances;
+							}
+						}
+
+						if (!FMath::IsNearlyEqual(previousTime, desc->AnimationTime))
+						{
+							++newStats.AdvancedInstances;
+						}
+					}
+				}
+
+				continue;
+			}
+
 			float nearestCameraDistance = -1.0f;
 			const bool bHasCameraDistance = GetNearestCameraDistance(desc->WorldTransform.GetLocation(), nearestCameraDistance);
 			const float effectiveUpdateRateHz = GetEffectiveAnimationUpdateRateHz(

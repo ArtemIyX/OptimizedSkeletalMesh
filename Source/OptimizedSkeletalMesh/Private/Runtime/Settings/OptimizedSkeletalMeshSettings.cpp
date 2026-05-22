@@ -51,6 +51,8 @@ namespace OptimizedSkeletalMesh
 		SetConsoleInt(TEXT("osm.Render.LocalLightMaxDynamicShadowCasters"), InSettings.LocalLightMaxDynamicShadowCasters);
 		SetConsoleInt(TEXT("osm.Render.LocalLightShadowLodBias"), InSettings.LocalLightShadowLodBias);
 		SetConsoleInt(TEXT("osm.Render.LocalLightMaxShadowSectionsPerLOD"), InSettings.LocalLightMaxShadowSectionsPerLOD);
+		SetConsoleInt(TEXT("osm.Animation.PauseCpuPoseWhenNotVisible"), InSettings.bPauseCpuPoseWhenNotVisible ? 1 : 0);
+		SetConsoleFloat(TEXT("osm.Animation.InvisiblePoseTickRateHz"), InSettings.InvisiblePoseTickRateHz);
 	}
 } // namespace OptimizedSkeletalMesh
 

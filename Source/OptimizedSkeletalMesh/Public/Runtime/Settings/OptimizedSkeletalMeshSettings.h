@@ -60,6 +60,12 @@ public:
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation", meta = (ClampMin = "0.0"))
 	float MinAnimationUpdateRateHz = 5.0f;
 
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation")
+	bool bPauseCpuPoseWhenNotVisible = true;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation", meta = (ClampMin = "0.0"))
+	float InvisiblePoseTickRateHz = 0.0f;
+
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Animation", meta = (EditCondition = "DistanceBasedRateMode == EOptimizedSkeletalMeshDistanceBasedRateMode::DistanceBasedArray"))
 	TArray<FOptimizedSkeletalMeshDistanceUpdateRateBand> DistanceUpdateRateBands = {
 		{ 1000.0f, 1.0f },
