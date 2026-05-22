@@ -246,6 +246,7 @@ namespace OptimizedSkeletalMesh
 		FMatrix44f InLocalToWorld = FMatrix44f::Identity;
 		int32 ForcedLODIndex = 0;
 		bool bAutoLOD = true;
+		bool bCastLocalLightShadows = true;
 	};
 
 	struct FBonePaletteRenderSnapshot
@@ -401,12 +402,6 @@ namespace OptimizedSkeletalMesh
 		Near = 0,
 		Mid = 1,
 		Far = 2
-	};
-
-	struct FShadowHistory
-	{
-		EShadowTier Tier = EShadowTier::Far;
-		uint64 LastTierSwitchFrame = 0;
 	};
 
 	static FRHIShaderResourceView* UploadUInt32DynamicBuffer(
@@ -883,57 +878,21 @@ namespace OptimizedSkeletalMesh
 		const float InDistanceSquared,
 		const float InNearFullShadowDistance,
 		const float InMidShadowDistance,
-		const float InMaxShadowCastDistance,
-		const EShadowTier InPreviousTier)
+		const float InMaxShadowCastDistance)
 	{
 		const float nearDistance = FMath::Max(0.0f, InNearFullShadowDistance);
 		const float midDistance = FMath::Max(nearDistance, InMidShadowDistance);
-		const float farDistance = InMaxShadowCastDistance > 0.0f
-			? FMath::Max(midDistance, InMaxShadowCastDistance)
-			: TNumericLimits<float>::Max();
-		const float hysteresisScale = 0.18f;
-		const float nearEnterSquared = FMath::Square(nearDistance * (1.0f - hysteresisScale));
-		const float nearExitSquared = FMath::Square(nearDistance * (1.0f + hysteresisScale));
-		const float midEnterSquared = FMath::Square(midDistance * (1.0f - hysteresisScale));
-		const float midExitSquared = FMath::Square(midDistance * (1.0f + hysteresisScale));
-		const float farExitSquared = FMath::Square(farDistance * (1.0f + hysteresisScale));
-
-		switch (InPreviousTier)
+		if (nearDistance > 0.0f && InDistanceSquared <= FMath::Square(nearDistance))
 		{
-		case EShadowTier::Near:
-			if (nearDistance <= 0.0f || InDistanceSquared > nearExitSquared)
-			{
-				return InDistanceSquared <= midExitSquared ? EShadowTier::Mid : EShadowTier::Far;
-			}
 			return EShadowTier::Near;
-
-		case EShadowTier::Mid:
-			if (nearDistance > 0.0f && InDistanceSquared <= nearEnterSquared)
-			{
-				return EShadowTier::Near;
-			}
-			if (InDistanceSquared > midExitSquared)
-			{
-				return EShadowTier::Far;
-			}
-			return EShadowTier::Mid;
-
-		case EShadowTier::Far:
-		default:
-			if (midDistance > 0.0f && InDistanceSquared <= midEnterSquared)
-			{
-				if (nearDistance > 0.0f && InDistanceSquared <= nearEnterSquared)
-				{
-					return EShadowTier::Near;
-				}
-				return EShadowTier::Mid;
-			}
-			if (InMaxShadowCastDistance > 0.0f && InDistanceSquared > farExitSquared)
-			{
-				return EShadowTier::Far;
-			}
-			return EShadowTier::Far;
 		}
+
+		if (midDistance > nearDistance && InDistanceSquared <= FMath::Square(midDistance))
+		{
+			return EShadowTier::Mid;
+		}
+
+		return EShadowTier::Far;
 	}
 
 	static bool ShouldCastShadowForInstance(
@@ -946,29 +905,20 @@ namespace OptimizedSkeletalMesh
 		const int32 InFarShadowUpdateDivisor,
 		const float InMaxShadowCastDistance,
 		const uint64 InFrameCounter,
-		FShadowHistory& InOutHistory)
+		const bool bInLocalLightShadowView,
+		EShadowTier& OutTier)
 	{
 		if (!bInCastShadows)
 		{
 			return false;
 		}
 
-		const EShadowTier previousTier = InOutHistory.Tier;
 		const EShadowTier tier = DetermineShadowTierWithHysteresis(
 			InDistanceSquared,
 			InNearFullShadowDistance,
 			InMidShadowDistance,
-			InMaxShadowCastDistance,
-			previousTier);
-		const bool bPromotedTier = static_cast<int32>(tier) < static_cast<int32>(previousTier);
-		if (tier != previousTier)
-		{
-			InOutHistory.Tier = tier;
-			InOutHistory.LastTierSwitchFrame = InFrameCounter;
-		}
-
-		constexpr uint64 minHoldFrames = 16;
-		const bool bWithinHoldWindow = (InFrameCounter - InOutHistory.LastTierSwitchFrame) <= minHoldFrames;
+			InMaxShadowCastDistance);
+		OutTier = tier;
 		const uint32 stableHash = GetStableShadowHash(InInstance.InstanceId);
 		if (tier == EShadowTier::Near)
 		{
@@ -989,10 +939,9 @@ namespace OptimizedSkeletalMesh
 		{
 			return false;
 		}
-
-		if (bWithinHoldWindow)
+		if (bInLocalLightShadowView)
 		{
-			return IsShadowDecimationFrame(stableHash, InFrameCounter, FMath::Max(1, InFarShadowUpdateDivisor / 2));
+			return false;
 		}
 
 		return IsShadowDecimationFrame(stableHash, InFrameCounter, InFarShadowUpdateDivisor);
@@ -1024,6 +973,10 @@ public:
 		, MidShadowLodBias(InComponent->GetMidShadowLodBias())
 		, FarShadowLodBias(InComponent->GetFarShadowLodBias())
 		, MaxShadowSectionsPerLOD(InComponent->GetMaxShadowSectionsPerLOD())
+		, LocalLightMaxShadowCastDistance(InComponent->GetLocalLightMaxShadowCastDistance())
+		, LocalLightMaxDynamicShadowCasters(InComponent->GetLocalLightMaxDynamicShadowCasters())
+		, LocalLightShadowLodBias(InComponent->GetLocalLightShadowLodBias())
+		, LocalLightMaxShadowSectionsPerLOD(InComponent->GetLocalLightMaxShadowSectionsPerLOD())
 	{
 		if (const UWorld* world = InComponent->GetWorld())
 		{
@@ -1061,6 +1014,7 @@ public:
 					renderInstance.InLocalToWorld = FMatrix44f(snapshot.Desc.WorldTransform.ToMatrixWithScale());
 					renderInstance.ForcedLODIndex = FMath::Max(0, snapshot.Desc.LODIndex);
 					renderInstance.bAutoLOD = snapshot.Desc.bAutoLOD;
+					renderInstance.bCastLocalLightShadows = snapshot.Desc.bCastLocalLightShadows;
 					++RegisteredInstanceCount;
 				}
 
@@ -1166,9 +1120,14 @@ public:
 
 			const bool bIsWireframeView = InViewFamily.EngineShowFlags.Wireframe;
 			const bool bIsLODColorationView = InViewFamily.EngineShowFlags.LODColoration;
+			const bool bIsShadowDepthView = InViews[viewIndex]->GetDynamicMeshElementsShadowCullFrustum() != nullptr;
+			const bool bIsLocalLightShadowView = bIsShadowDepthView && InViews[viewIndex]->IsPerspectiveProjection();
 			FPrimitiveDrawInterface* pdi = InCollector.GetPDI(viewIndex);
 			int32 drawnMeshInstances = 0;
-			int32 remainingShadowBudget = MaxDynamicShadowCasters > 0 ? MaxDynamicShadowCasters : TNumericLimits<int32>::Max();
+			const int32 shadowBudgetLimit = bIsLocalLightShadowView
+				? LocalLightMaxDynamicShadowCasters
+				: MaxDynamicShadowCasters;
+			int32 remainingShadowBudget = shadowBudgetLimit > 0 ? shadowBudgetLimit : TNumericLimits<int32>::Max();
 
 			for (const OptimizedSkeletalMesh::FMeshRenderBatch& batch : MeshBatches)
 			{
@@ -1225,11 +1184,16 @@ public:
 						++frameStats.VisibleInstances;
 						const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
 						const float distanceSquared = FVector::DistSquared(viewOrigin, instance.worldBounds.GetCenter());
-						OptimizedSkeletalMesh::FShadowHistory& shadowHistory =
-							ShadowHistoryByInstanceId.FindOrAdd(instance.InstanceId);
+						const float effectiveMaxShadowCastDistance = bIsLocalLightShadowView
+							? LocalLightMaxShadowCastDistance
+							: MaxShadowCastDistance;
+						OptimizedSkeletalMesh::EShadowTier shadowTier = OptimizedSkeletalMesh::EShadowTier::Far;
 						const bool bNearGuaranteed = NearFullShadowDistance > 0.0f
 							&& distanceSquared <= FMath::Square(NearFullShadowDistance);
-						const bool bInstanceShadowVisible = OptimizedSkeletalMesh::ShouldCastShadowForInstance(
+						const bool bPassesLocalLightInstanceGate =
+							!bIsLocalLightShadowView || instance.bCastLocalLightShadows;
+						const bool bInstanceShadowVisible = bPassesLocalLightInstanceGate
+							&& OptimizedSkeletalMesh::ShouldCastShadowForInstance(
 							instance,
 							distanceSquared,
 							bCastShadows,
@@ -1237,9 +1201,10 @@ public:
 							MidShadowDistance,
 							MidShadowUpdateDivisor,
 							FarShadowUpdateDivisor,
-							MaxShadowCastDistance,
+							effectiveMaxShadowCastDistance,
 							GFrameCounter,
-							shadowHistory);
+							bIsLocalLightShadowView,
+							shadowTier);
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
 						{
 							frameStats.RenderVisibleInstanceIds.Add(instance.InstanceId);
@@ -1261,9 +1226,9 @@ public:
 							const int32 shadowLodIndex = OptimizedSkeletalMesh::ChooseShadowCasterLOD(
 								chosenLodIndex,
 								batch.lodResources.Num(),
-								shadowHistory.Tier,
+								shadowTier,
 								NearShadowLodBias,
-								MidShadowLodBias,
+								bIsLocalLightShadowView ? LocalLightShadowLodBias : MidShadowLodBias,
 								FarShadowLodBias);
 							OptimizedSkeletalMesh::FShadowCandidate& candidate = shadowCandidates.AddDefaulted_GetRef();
 							candidate.Instance = &instance;
@@ -1356,6 +1321,9 @@ public:
 
 						const bool bSubmitShadowOnlyMesh =
 							!bIsWireframeView && bCastShadows && !shadowVisibleInstances.IsEmpty();
+						const int32 maxShadowSectionsPerLod = bIsLocalLightShadowView
+							? LocalLightMaxShadowSectionsPerLOD
+							: MaxShadowSectionsPerLOD;
 						FMeshBatchDynamicPrimitiveData* shadowDynamicPrimitiveData = nullptr;
 						FBox shadowWorldBounds(ForceInit);
 						if (bSubmitShadowOnlyMesh)
@@ -1538,8 +1506,8 @@ public:
 								&& shadowDynamicPrimitiveUniformBuffer
 								&& shadowWorldBounds.IsValid)
 							{
-								const bool bAllowShadowSection = MaxShadowSectionsPerLOD <= 0
-									|| shadowSubmittedSectionsForLod < MaxShadowSectionsPerLOD;
+								const bool bAllowShadowSection = maxShadowSectionsPerLod <= 0
+									|| shadowSubmittedSectionsForLod < maxShadowSectionsPerLod;
 								if (!bAllowShadowSection)
 								{
 									continue;
@@ -1671,11 +1639,16 @@ public:
 					++frameStats.VisibleInstances;
 					const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
 					const float distanceSquared = FVector::DistSquared(viewOrigin, instance.worldBounds.GetCenter());
-					OptimizedSkeletalMesh::FShadowHistory& shadowHistory =
-						ShadowHistoryByInstanceId.FindOrAdd(instance.InstanceId);
+					const float effectiveMaxShadowCastDistance = bIsLocalLightShadowView
+						? LocalLightMaxShadowCastDistance
+						: MaxShadowCastDistance;
+					OptimizedSkeletalMesh::EShadowTier shadowTier = OptimizedSkeletalMesh::EShadowTier::Far;
 					const bool bNearGuaranteed = NearFullShadowDistance > 0.0f
 						&& distanceSquared <= FMath::Square(NearFullShadowDistance);
-					const bool bInstanceShadowVisible = OptimizedSkeletalMesh::ShouldCastShadowForInstance(
+					const bool bPassesLocalLightInstanceGate =
+						!bIsLocalLightShadowView || instance.bCastLocalLightShadows;
+					const bool bInstanceShadowVisible = bPassesLocalLightInstanceGate
+						&& OptimizedSkeletalMesh::ShouldCastShadowForInstance(
 						instance,
 						distanceSquared,
 						bCastShadows,
@@ -1683,9 +1656,10 @@ public:
 						MidShadowDistance,
 						MidShadowUpdateDivisor,
 						FarShadowUpdateDivisor,
-						MaxShadowCastDistance,
+						effectiveMaxShadowCastDistance,
 						GFrameCounter,
-						shadowHistory);
+						bIsLocalLightShadowView,
+						shadowTier);
 					const bool bInstanceShadowSelected = bInstanceShadowVisible
 						&& (bNearGuaranteed || remainingShadowBudget > 0);
 					if (bInstanceShadowSelected)
@@ -1988,7 +1962,6 @@ private:
 	int32 SkinningSkinWeight16BitWeightLODs = 0;
 	int32 SkinningMissingSkinWeightLODs = 0;
 	int32 SkinningGPUSkinReadyLODs = 0;
-	mutable TMap<int32, OptimizedSkeletalMesh::FShadowHistory> ShadowHistoryByInstanceId;
 	bool bDrawDebugBounds = true;
 	bool bDrawMeshSections = false;
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
@@ -2008,6 +1981,10 @@ private:
 	int32 MidShadowLodBias = 1;
 	int32 FarShadowLodBias = 2;
 	int32 MaxShadowSectionsPerLOD = 2;
+	float LocalLightMaxShadowCastDistance = 2000.0f;
+	int32 LocalLightMaxDynamicShadowCasters = 24;
+	int32 LocalLightShadowLodBias = 3;
+	int32 LocalLightMaxShadowSectionsPerLOD = 1;
 };
 
 UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(const FObjectInitializer& InObjectInitializer)
@@ -2152,6 +2129,31 @@ void UOptimizedSkeletalMeshRenderComponent::SetFarShadowLodBias(const int32 InFa
 void UOptimizedSkeletalMeshRenderComponent::SetMaxShadowSectionsPerLOD(const int32 InMaxShadowSectionsPerLOD)
 {
 	MaxShadowSectionsPerLOD = FMath::Max(0, InMaxShadowSectionsPerLOD);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetLocalLightMaxShadowCastDistance(const float InLocalLightMaxShadowCastDistance)
+{
+	LocalLightMaxShadowCastDistance = FMath::Max(0.0f, InLocalLightMaxShadowCastDistance);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetLocalLightMaxDynamicShadowCasters(const int32 InLocalLightMaxDynamicShadowCasters)
+{
+	LocalLightMaxDynamicShadowCasters = FMath::Max(0, InLocalLightMaxDynamicShadowCasters);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetLocalLightShadowLodBias(const int32 InLocalLightShadowLodBias)
+{
+	LocalLightShadowLodBias = FMath::Max(0, InLocalLightShadowLodBias);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetLocalLightMaxShadowSectionsPerLOD(
+	const int32 InLocalLightMaxShadowSectionsPerLOD)
+{
+	LocalLightMaxShadowSectionsPerLOD = FMath::Max(0, InLocalLightMaxShadowSectionsPerLOD);
 	RequestRenderRefresh();
 }
 

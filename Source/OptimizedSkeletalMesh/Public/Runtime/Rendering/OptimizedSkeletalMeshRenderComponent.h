@@ -145,6 +145,10 @@ public:
 	void SetMidShadowLodBias(int32 InMidShadowLodBias);
 	void SetFarShadowLodBias(int32 InFarShadowLodBias);
 	void SetMaxShadowSectionsPerLOD(int32 InMaxShadowSectionsPerLOD);
+	void SetLocalLightMaxShadowCastDistance(float InLocalLightMaxShadowCastDistance);
+	void SetLocalLightMaxDynamicShadowCasters(int32 InLocalLightMaxDynamicShadowCasters);
+	void SetLocalLightShadowLodBias(int32 InLocalLightShadowLodBias);
+	void SetLocalLightMaxShadowSectionsPerLOD(int32 InLocalLightMaxShadowSectionsPerLOD);
 	void RequestRenderRefresh();
 	bool PushBonePalettesToRenderThread();
 #pragma endregion
@@ -171,6 +175,10 @@ public:
 	int32 GetMidShadowLodBias() const { return MidShadowLodBias; }
 	int32 GetFarShadowLodBias() const { return FarShadowLodBias; }
 	int32 GetMaxShadowSectionsPerLOD() const { return MaxShadowSectionsPerLOD; }
+	float GetLocalLightMaxShadowCastDistance() const { return LocalLightMaxShadowCastDistance; }
+	int32 GetLocalLightMaxDynamicShadowCasters() const { return LocalLightMaxDynamicShadowCasters; }
+	int32 GetLocalLightShadowLodBias() const { return LocalLightShadowLodBias; }
+	int32 GetLocalLightMaxShadowSectionsPerLOD() const { return LocalLightMaxShadowSectionsPerLOD; }
 	const FOptimizedSkeletalMeshRenderStats& GetLastRenderStats() const { return LastRenderStats; }
 	void ApplyRenderStats_GameThread(const FOptimizedSkeletalMeshRenderStats& InStats);
 #pragma endregion
@@ -246,6 +254,18 @@ private:
 
 	UPROPERTY(Transient)
 	int32 MaxShadowSectionsPerLOD = 2;
+
+	UPROPERTY(Transient)
+	float LocalLightMaxShadowCastDistance = 2000.0f;
+
+	UPROPERTY(Transient)
+	int32 LocalLightMaxDynamicShadowCasters = 24;
+
+	UPROPERTY(Transient)
+	int32 LocalLightShadowLodBias = 3;
+
+	UPROPERTY(Transient)
+	int32 LocalLightMaxShadowSectionsPerLOD = 1;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats", meta = (AllowPrivateAccess = "true"))
 	FOptimizedSkeletalMeshRenderStats LastRenderStats;

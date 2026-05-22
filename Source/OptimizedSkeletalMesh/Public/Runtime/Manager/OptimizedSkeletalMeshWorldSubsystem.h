@@ -79,6 +79,9 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceDesc
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh")
 	bool bVisible = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
+	bool bCastLocalLightShadows = true;
 };
 
 USTRUCT(BlueprintType)
@@ -235,6 +238,18 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0"))
 	int32 MaxShadowSectionsPerLOD = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0.0"))
+	float LocalLightMaxShadowCastDistance = 2000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0"))
+	int32 LocalLightMaxDynamicShadowCasters = 24;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0"))
+	int32 LocalLightShadowLodBias = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0"))
+	int32 LocalLightMaxShadowSectionsPerLOD = 1;
 };
 
 UCLASS()
