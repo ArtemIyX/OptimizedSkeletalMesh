@@ -430,14 +430,9 @@ namespace OptimizedSkeletalMesh
 
 	static void AddVisibleLODStat(FOptimizedSkeletalMeshRenderStats& InStats, const int32 lodIndex, const int32 InCount)
 	{
-		if (lodIndex < 0 || InCount <= 0)
+		if (lodIndex < 0 || InCount <= 0 || !InStats.VisibleInstancesByLOD.IsValidIndex(lodIndex))
 		{
 			return;
-		}
-
-		if (InStats.VisibleInstancesByLOD.Num() <= lodIndex)
-		{
-			InStats.VisibleInstancesByLOD.SetNumZeroed(lodIndex + 1);
 		}
 
 		InStats.VisibleInstancesByLOD[lodIndex] += InCount;
