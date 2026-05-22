@@ -963,11 +963,6 @@ void UOptimizedSkeletalMeshWorldSubsystem::GetInstancesSnapshot(
 		snapshot.Handle = FOptimizedSkeletalMeshInstanceHandle(pair.Key);
 		snapshot.Desc = pair.Value;
 	}
-
-	OutInstances.Sort(
-		[](const FOptimizedSkeletalMeshInstanceSnapshot& InLeft, const FOptimizedSkeletalMeshInstanceSnapshot& InRight) {
-			return InLeft.Handle.Id < InRight.Handle.Id;
-		});
 }
 
 int32 UOptimizedSkeletalMeshWorldSubsystem::GetInstanceCount() const
