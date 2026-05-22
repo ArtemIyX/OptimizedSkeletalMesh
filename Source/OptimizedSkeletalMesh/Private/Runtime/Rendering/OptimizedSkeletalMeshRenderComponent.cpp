@@ -2057,18 +2057,33 @@ void UOptimizedSkeletalMeshRenderComponent::SetOptimizedSkeletalMeshSubsystem(
 
 void UOptimizedSkeletalMeshRenderComponent::SetDrawDebugBounds(const bool bInDrawDebugBounds)
 {
+	if (bDrawDebugBounds == bInDrawDebugBounds)
+	{
+		return;
+	}
+
 	bDrawDebugBounds = bInDrawDebugBounds;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetDrawMeshSections(const bool bInDrawMeshSections)
 {
+	if (bDrawMeshSections == bInDrawMeshSections)
+	{
+		return;
+	}
+
 	bDrawMeshSections = bInDrawMeshSections;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetMeshDrawMode(const EOptimizedSkeletalMeshDrawMode InMeshDrawMode)
 {
+	if (MeshDrawMode == InMeshDrawMode)
+	{
+		return;
+	}
+
 	MeshDrawMode = InMeshDrawMode;
 	RequestRenderRefresh();
 }
@@ -2117,6 +2132,11 @@ void UOptimizedSkeletalMeshRenderComponent::SetDrawCullTestBounds(const bool bIn
 
 void UOptimizedSkeletalMeshRenderComponent::SetCastShadows(const bool bInCastShadows)
 {
+	if (bCastShadows == bInCastShadows)
+	{
+		return;
+	}
+
 	bCastShadows = bInCastShadows;
 	bCastDynamicShadow = bInCastShadows;
 	CastShadow = bInCastShadows;
@@ -2125,86 +2145,170 @@ void UOptimizedSkeletalMeshRenderComponent::SetCastShadows(const bool bInCastSha
 
 void UOptimizedSkeletalMeshRenderComponent::SetNearFullShadowDistance(const float InNearFullShadowDistance)
 {
-	NearFullShadowDistance = FMath::Max(0.0f, InNearFullShadowDistance);
+	const float nearShadowDistance = FMath::Max(0.0f, InNearFullShadowDistance);
+	if (FMath::IsNearlyEqual(NearFullShadowDistance, nearShadowDistance))
+	{
+		return;
+	}
+
+	NearFullShadowDistance = nearShadowDistance;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetMidShadowDistance(const float InMidShadowDistance)
 {
-	MidShadowDistance = FMath::Max(0.0f, InMidShadowDistance);
+	const float midShadowDistance = FMath::Max(0.0f, InMidShadowDistance);
+	if (FMath::IsNearlyEqual(MidShadowDistance, midShadowDistance))
+	{
+		return;
+	}
+
+	MidShadowDistance = midShadowDistance;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetMidShadowUpdateDivisor(const int32 InMidShadowUpdateDivisor)
 {
-	MidShadowUpdateDivisor = FMath::Max(1, InMidShadowUpdateDivisor);
+	const int32 midShadowUpdateDivisor = FMath::Max(1, InMidShadowUpdateDivisor);
+	if (MidShadowUpdateDivisor == midShadowUpdateDivisor)
+	{
+		return;
+	}
+
+	MidShadowUpdateDivisor = midShadowUpdateDivisor;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetFarShadowUpdateDivisor(const int32 InFarShadowUpdateDivisor)
 {
-	FarShadowUpdateDivisor = FMath::Max(0, InFarShadowUpdateDivisor);
+	const int32 farShadowUpdateDivisor = FMath::Max(0, InFarShadowUpdateDivisor);
+	if (FarShadowUpdateDivisor == farShadowUpdateDivisor)
+	{
+		return;
+	}
+
+	FarShadowUpdateDivisor = farShadowUpdateDivisor;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetMaxShadowCastDistance(const float InMaxShadowCastDistance)
 {
-	MaxShadowCastDistance = FMath::Max(0.0f, InMaxShadowCastDistance);
+	const float maxShadowCastDistance = FMath::Max(0.0f, InMaxShadowCastDistance);
+	if (FMath::IsNearlyEqual(MaxShadowCastDistance, maxShadowCastDistance))
+	{
+		return;
+	}
+
+	MaxShadowCastDistance = maxShadowCastDistance;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetMaxDynamicShadowCasters(const int32 InMaxDynamicShadowCasters)
 {
-	MaxDynamicShadowCasters = FMath::Max(0, InMaxDynamicShadowCasters);
+	const int32 maxDynamicShadowCasters = FMath::Max(0, InMaxDynamicShadowCasters);
+	if (MaxDynamicShadowCasters == maxDynamicShadowCasters)
+	{
+		return;
+	}
+
+	MaxDynamicShadowCasters = maxDynamicShadowCasters;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetNearShadowLodBias(const int32 InNearShadowLodBias)
 {
-	NearShadowLodBias = FMath::Max(0, InNearShadowLodBias);
+	const int32 nearShadowLodBias = FMath::Max(0, InNearShadowLodBias);
+	if (NearShadowLodBias == nearShadowLodBias)
+	{
+		return;
+	}
+
+	NearShadowLodBias = nearShadowLodBias;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetMidShadowLodBias(const int32 InMidShadowLodBias)
 {
-	MidShadowLodBias = FMath::Max(0, InMidShadowLodBias);
+	const int32 midShadowLodBias = FMath::Max(0, InMidShadowLodBias);
+	if (MidShadowLodBias == midShadowLodBias)
+	{
+		return;
+	}
+
+	MidShadowLodBias = midShadowLodBias;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetFarShadowLodBias(const int32 InFarShadowLodBias)
 {
-	FarShadowLodBias = FMath::Max(0, InFarShadowLodBias);
+	const int32 farShadowLodBias = FMath::Max(0, InFarShadowLodBias);
+	if (FarShadowLodBias == farShadowLodBias)
+	{
+		return;
+	}
+
+	FarShadowLodBias = farShadowLodBias;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetMaxShadowSectionsPerLOD(const int32 InMaxShadowSectionsPerLOD)
 {
-	MaxShadowSectionsPerLOD = FMath::Max(0, InMaxShadowSectionsPerLOD);
+	const int32 maxShadowSectionsPerLod = FMath::Max(0, InMaxShadowSectionsPerLOD);
+	if (MaxShadowSectionsPerLOD == maxShadowSectionsPerLod)
+	{
+		return;
+	}
+
+	MaxShadowSectionsPerLOD = maxShadowSectionsPerLod;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetLocalLightMaxShadowCastDistance(const float InLocalLightMaxShadowCastDistance)
 {
-	LocalLightMaxShadowCastDistance = FMath::Max(0.0f, InLocalLightMaxShadowCastDistance);
+	const float localLightMaxShadowCastDistance = FMath::Max(0.0f, InLocalLightMaxShadowCastDistance);
+	if (FMath::IsNearlyEqual(LocalLightMaxShadowCastDistance, localLightMaxShadowCastDistance))
+	{
+		return;
+	}
+
+	LocalLightMaxShadowCastDistance = localLightMaxShadowCastDistance;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetLocalLightMaxDynamicShadowCasters(const int32 InLocalLightMaxDynamicShadowCasters)
 {
-	LocalLightMaxDynamicShadowCasters = FMath::Max(0, InLocalLightMaxDynamicShadowCasters);
+	const int32 localLightMaxDynamicShadowCasters = FMath::Max(0, InLocalLightMaxDynamicShadowCasters);
+	if (LocalLightMaxDynamicShadowCasters == localLightMaxDynamicShadowCasters)
+	{
+		return;
+	}
+
+	LocalLightMaxDynamicShadowCasters = localLightMaxDynamicShadowCasters;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetLocalLightShadowLodBias(const int32 InLocalLightShadowLodBias)
 {
-	LocalLightShadowLodBias = FMath::Max(0, InLocalLightShadowLodBias);
+	const int32 localLightShadowLodBias = FMath::Max(0, InLocalLightShadowLodBias);
+	if (LocalLightShadowLodBias == localLightShadowLodBias)
+	{
+		return;
+	}
+
+	LocalLightShadowLodBias = localLightShadowLodBias;
 	RequestRenderRefresh();
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetLocalLightMaxShadowSectionsPerLOD(
 	const int32 InLocalLightMaxShadowSectionsPerLOD)
 {
-	LocalLightMaxShadowSectionsPerLOD = FMath::Max(0, InLocalLightMaxShadowSectionsPerLOD);
+	const int32 localLightMaxShadowSectionsPerLod = FMath::Max(0, InLocalLightMaxShadowSectionsPerLOD);
+	if (LocalLightMaxShadowSectionsPerLOD == localLightMaxShadowSectionsPerLod)
+	{
+		return;
+	}
+
+	LocalLightMaxShadowSectionsPerLOD = localLightMaxShadowSectionsPerLod;
 	RequestRenderRefresh();
 }
 
