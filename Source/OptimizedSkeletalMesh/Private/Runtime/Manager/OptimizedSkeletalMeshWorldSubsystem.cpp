@@ -1298,19 +1298,18 @@ const TArray<FMatrix44f>* UOptimizedSkeletalMeshWorldSubsystem::GetInstanceBoneP
 void UOptimizedSkeletalMeshWorldSubsystem::GetBonePaletteSnapshots(
 	TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& OutSnapshots) const
 {
-	OutSnapshots.Reset(RenderVisibleInstanceIds.Num());
+	OutSnapshots.Reset(InstanceBonePalettes.Num());
 
-	for (const int32 instanceId : RenderVisibleInstanceIds)
+	for (const TPair<int32, TArray<FMatrix44f>>& pair : InstanceBonePalettes)
 	{
-		const TArray<FMatrix44f>* bonePalette = InstanceBonePalettes.Find(instanceId);
-		if (!bonePalette || bonePalette->IsEmpty())
+		if (pair.Value.IsEmpty())
 		{
 			continue;
 		}
 
 		FOptimizedSkeletalMeshBonePaletteSnapshot& snapshot = OutSnapshots.AddDefaulted_GetRef();
-		snapshot.Handle = FOptimizedSkeletalMeshInstanceHandle(instanceId);
-		snapshot.BonePalette = *bonePalette;
+		snapshot.Handle = FOptimizedSkeletalMeshInstanceHandle(pair.Key);
+		snapshot.BonePalette = pair.Value;
 	}
 
 	OutSnapshots.Sort(
@@ -1593,26 +1592,12 @@ void UOptimizedSkeletalMeshWorldSubsystem::MarkBonePaletteDirty(const int32 InIn
 
 bool UOptimizedSkeletalMeshWorldSubsystem::HasDirtyRenderVisibleBonePalettes() const
 {
-	for (const int32 instanceId : DirtyBonePaletteInstanceIds)
-	{
-		if (RenderVisibleInstanceIds.Contains(instanceId))
-		{
-			return true;
-		}
-	}
-
-	return false;
+	return !DirtyBonePaletteInstanceIds.IsEmpty();
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::ClearDirtyRenderVisibleBonePalettes()
 {
-	for (auto iterator = DirtyBonePaletteInstanceIds.CreateIterator(); iterator; ++iterator)
-	{
-		if (RenderVisibleInstanceIds.Contains(*iterator))
-		{
-			iterator.RemoveCurrent();
-		}
-	}
+	DirtyBonePaletteInstanceIds.Reset();
 }
 
 float UOptimizedSkeletalMeshWorldSubsystem::GetEffectiveAnimationUpdateRateHz(

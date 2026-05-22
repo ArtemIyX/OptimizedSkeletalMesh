@@ -243,6 +243,7 @@ IMPLEMENT_VERTEX_FACTORY_TYPE(
 namespace OptimizedSkeletalMesh
 {
 	static constexpr float FallbackInstanceExtent = 50.0f;
+	static constexpr uint32 InvalidPaletteOffset = 0xffffffffu;
 
 	struct FRenderInstance
 	{
@@ -1093,6 +1094,7 @@ public:
 		uint32 InVisibilityMap,
 		FMeshElementCollector& InCollector) const override
 	{
+		bool bPublishedPrimaryViewStats = false;
 		for (int32 viewIndex = 0; viewIndex < InViews.Num(); ++viewIndex)
 		{
 			if (!(InVisibilityMap & (1 << viewIndex)))
@@ -1393,7 +1395,7 @@ public:
 							{
 								const OptimizedSkeletalMesh::FBonePaletteRange* range =
 									visibleInstance ? BonePaletteRangesByInstanceId.Find(visibleInstance->InstanceId) : nullptr;
-								baseInstancePaletteOffsets.Add(range ? range->Offset : 0u);
+								baseInstancePaletteOffsets.Add(range ? range->Offset : OptimizedSkeletalMesh::InvalidPaletteOffset);
 								if (!range)
 								{
 									++frameStats.SkinningGPUSkinFallbackDraws;
@@ -1412,7 +1414,7 @@ public:
 								{
 									const OptimizedSkeletalMesh::FBonePaletteRange* range =
 										shadowInstance ? BonePaletteRangesByInstanceId.Find(shadowInstance->InstanceId) : nullptr;
-									shadowInstancePaletteOffsets.Add(range ? range->Offset : 0u);
+									shadowInstancePaletteOffsets.Add(range ? range->Offset : OptimizedSkeletalMesh::InvalidPaletteOffset);
 								}
 
 								shadowInstancePaletteOffsetSRV = OptimizedSkeletalMesh::UploadUInt32DynamicBuffer(
@@ -1847,7 +1849,11 @@ public:
 				}
 			}
 
-			PublishRenderStats(frameStats);
+			if (!bIsShadowDepthView && !bPublishedPrimaryViewStats)
+			{
+				PublishRenderStats(frameStats);
+				bPublishedPrimaryViewStats = true;
+			}
 		}
 	}
 

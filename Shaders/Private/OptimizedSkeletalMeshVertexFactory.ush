@@ -32,35 +32,68 @@ uint OptimizedSectionBoneMapCount;
 uint OptimizedVariableBonesPerVertex;
 
 #define OPTIMIZED_MAX_SHADER_INFLUENCES 12
+#define OPTIMIZED_INVALID_PALETTE_OFFSET 0xffffffffu
 
-uint OptimizedGetDrawInstanceIndexFull(FVertexFactoryInput Input)
+uint OptimizedGetDrawInstanceIndexFromCommon(FVertexFactoryIntermediatesCommon Intermediates)
 {
-#if USE_INSTANCING
-	return GetInstanceIdFromVF(Input);
+#if VF_USE_PRIMITIVE_SCENE_DATA
+	const FPrimitiveSceneData PrimitiveData = GetPrimitiveData(Intermediates);
+	return Intermediates.SceneData.InstanceId - PrimitiveData.InstanceSceneDataOffset;
 #else
 	return 0;
 #endif
+}
+
+uint OptimizedGetDrawInstanceIndexFull(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return OptimizedGetDrawInstanceIndexFromCommon(Intermediates.Common);
 }
 
 uint OptimizedGetDrawInstanceIndexPositionOnly(FPositionOnlyVertexFactoryInput Input)
 {
-#if USE_INSTANCING
-	return GetInstanceIdFromVF(Input);
-#else
-	return 0;
-#endif
+	const FVertexFactoryIntermediatesCommon Intermediates = LOCALVF_GET_COMMON_INTERMEDIATES(Input);
+	return OptimizedGetDrawInstanceIndexFromCommon(Intermediates);
 }
 
 uint OptimizedGetDrawInstanceIndexPositionAndNormalOnly(FPositionAndNormalOnlyVertexFactoryInput Input)
 {
-#if USE_INSTANCING
-	return GetInstanceIdFromVF(Input);
-#else
-	return 0;
-#endif
+	const FVertexFactoryIntermediatesCommon Intermediates = LOCALVF_GET_COMMON_INTERMEDIATES(Input);
+	return OptimizedGetDrawInstanceIndexFromCommon(Intermediates);
 }
 
 bool OptimizedCanSkinVertex(uint DrawInstanceIndex)
+{
+	if (OptimizedMaxBoneInfluences == 0
+		|| OptimizedBoneIndexByteSize == 0
+		|| OptimizedBoneWeightByteSize == 0
+		|| OptimizedBonePaletteMatrixCount == 0
+		|| OptimizedInstancePaletteOffsetCount == 0
+		|| OptimizedSectionBoneMapCount == 0
+		|| DrawInstanceIndex >= OptimizedInstancePaletteOffsetCount)
+	{
+		return false;
+	}
+
+	const uint PaletteOffset = OptimizedInstancePaletteOffsets[DrawInstanceIndex];
+	return PaletteOffset != OPTIMIZED_INVALID_PALETTE_OFFSET && PaletteOffset < OptimizedBonePaletteMatrixCount;
+}
+
+uint OptimizedGetPaletteOffset(uint DrawInstanceIndex)
+{
+	return OptimizedInstancePaletteOffsets[DrawInstanceIndex];
+}
+
+bool OptimizedIsValidMatrixIndex(uint MatrixIndex)
+{
+	return MatrixIndex < OptimizedBonePaletteMatrixCount;
+}
+
+bool OptimizedIsValidSectionBoneIndex(uint SectionBoneIndex)
+{
+	return SectionBoneIndex < OptimizedSectionBoneMapCount;
+}
+
+bool OptimizedIsValidDrawInstanceIndex(uint DrawInstanceIndex)
 {
 	return OptimizedMaxBoneInfluences > 0
 		&& OptimizedBoneIndexByteSize > 0
@@ -133,16 +166,16 @@ uint OptimizedReadSkeletonBoneIndex(uint WeightOffset, uint InfluenceIndex)
 	const uint SectionBoneIndex = OptimizedReadSkinUInt(
 		WeightOffset + OptimizedBoneIndexByteSize * InfluenceIndex,
 		OptimizedBoneIndexByteSize);
-	return SectionBoneIndex < OptimizedSectionBoneMapCount
+	return OptimizedIsValidSectionBoneIndex(SectionBoneIndex)
 		? OptimizedSectionBoneMap[SectionBoneIndex]
 		: 0u;
 }
 
 float4x4 OptimizedGetBoneMatrix(uint DrawInstanceIndex, uint SkeletonBoneIndex)
 {
-	const uint PaletteOffset = OptimizedInstancePaletteOffsets[DrawInstanceIndex];
+	const uint PaletteOffset = OptimizedGetPaletteOffset(DrawInstanceIndex);
 	const uint MatrixIndex = PaletteOffset + SkeletonBoneIndex;
-	return MatrixIndex < OptimizedBonePaletteMatrixCount
+	return OptimizedIsValidMatrixIndex(MatrixIndex)
 		? OptimizedBonePalette[MatrixIndex]
 		: float4x4(
 			1, 0, 0, 0,
@@ -198,9 +231,9 @@ float3 OptimizedSkinPosition(uint DrawInstanceIndex, uint VertexIndex, float3 Po
 	return mul(float4(Position, 1.0f), OptimizedCalcBlendMatrix(DrawInstanceIndex, VertexIndex)).xyz;
 }
 
-float3 OptimizedSkinPositionFull(FVertexFactoryInput Input)
+float3 OptimizedSkinPositionFull(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
 {
-	return OptimizedSkinPosition(OptimizedGetDrawInstanceIndexFull(Input), Input.VertexId, Input.Position.xyz);
+	return OptimizedSkinPosition(OptimizedGetDrawInstanceIndexFull(Input, Intermediates), Input.VertexId, Input.Position.xyz);
 }
 
 float3 OptimizedSkinPositionPositionOnly(FPositionOnlyVertexFactoryInput Input)
@@ -213,9 +246,12 @@ float3 OptimizedSkinPositionPositionAndNormalOnly(FPositionAndNormalOnlyVertexFa
 	return OptimizedSkinPosition(OptimizedGetDrawInstanceIndexPositionAndNormalOnly(Input), Input.VertexId, Input.Position.xyz);
 }
 
-half3x3 OptimizedSkinTangentToLocal(FVertexFactoryInput Input, half3x3 FallbackTangentToLocal)
+half3x3 OptimizedSkinTangentToLocal(
+	FVertexFactoryInput Input,
+	FVertexFactoryIntermediates Intermediates,
+	half3x3 FallbackTangentToLocal)
 {
-	const uint DrawInstanceIndex = OptimizedGetDrawInstanceIndexFull(Input);
+	const uint DrawInstanceIndex = OptimizedGetDrawInstanceIndexFull(Input, Intermediates);
 	if (!OptimizedCanSkinVertex(DrawInstanceIndex))
 	{
 		return FallbackTangentToLocal;
@@ -243,7 +279,7 @@ half3x3 OptimizedSkinTangentToLocal(FVertexFactoryInput Input, half3x3 FallbackT
 FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput Input)
 {
 	FVertexFactoryIntermediates Intermediates = OptimizedLocalGetVertexFactoryIntermediates(Input);
-	Intermediates.TangentToLocal = OptimizedSkinTangentToLocal(Input, Intermediates.TangentToLocal);
+	Intermediates.TangentToLocal = OptimizedSkinTangentToLocal(Input, Intermediates, Intermediates.TangentToLocal);
 	Intermediates.TangentToWorld = CalcTangentToWorld(Intermediates, Intermediates.TangentToLocal);
 	return Intermediates;
 }
@@ -255,7 +291,7 @@ half3x3 VertexFactoryGetTangentToLocal(FVertexFactoryInput Input, FVertexFactory
 
 float3 VertexFactoryGetInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
 {
-	return CalcPositionInstanceSpace(Intermediates.Common, float4(OptimizedSkinPositionFull(Input), 1.0f)).xyz;
+	return CalcPositionInstanceSpace(Intermediates.Common, float4(OptimizedSkinPositionFull(Input, Intermediates), 1.0f)).xyz;
 }
 
 float3 VertexFactoryGetPreviousInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
@@ -266,7 +302,7 @@ float3 VertexFactoryGetPreviousInstanceSpacePosition(FVertexFactoryInput Input, 
 float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
 {
 	FDFMatrix LocalToWorld = GetInstanceData(Intermediates).LocalToWorld;
-	const float3 Position = CalcPositionPrimitiveSpace(Intermediates.Common, float4(OptimizedSkinPositionFull(Input), 1.0f)).xyz;
+	const float3 Position = CalcPositionPrimitiveSpace(Intermediates.Common, float4(OptimizedSkinPositionFull(Input, Intermediates), 1.0f)).xyz;
 	return TransformLocalToTranslatedWorld(Position, LocalToWorld) * Intermediates.IsVisible;
 }
 
