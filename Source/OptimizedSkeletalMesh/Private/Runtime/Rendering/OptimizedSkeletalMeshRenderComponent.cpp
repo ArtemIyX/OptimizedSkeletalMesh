@@ -819,6 +819,7 @@ namespace OptimizedSkeletalMesh
 		const FSceneView& InView,
 		const FRenderInstance& InInstance,
 		const bool bInCastShadows,
+		const float InNearFullShadowDistance,
 		const float InMaxShadowCastDistance)
 	{
 		if (!bInCastShadows)
@@ -833,6 +834,11 @@ namespace OptimizedSkeletalMesh
 
 		const FVector instanceCenter = InInstance.worldBounds.GetCenter();
 		const float distanceSquared = FVector::DistSquared(InView.ViewMatrices.GetViewOrigin(), instanceCenter);
+		if (InNearFullShadowDistance > 0.0f && distanceSquared <= FMath::Square(InNearFullShadowDistance))
+		{
+			return true;
+		}
+
 		return distanceSquared <= FMath::Square(InMaxShadowCastDistance);
 	}
 } // namespace OptimizedSkeletalMesh
@@ -852,7 +858,9 @@ public:
 		, bDrawCullingDebug(InComponent->ShouldDrawCullingDebug())
 		, bDrawCullTestBounds(InComponent->ShouldDrawCullTestBounds())
 		, bCastShadows(InComponent->ShouldCastShadows())
+		, NearFullShadowDistance(InComponent->GetNearFullShadowDistance())
 		, MaxShadowCastDistance(InComponent->GetMaxShadowCastDistance())
+		, MaxDynamicShadowCasters(InComponent->GetMaxDynamicShadowCasters())
 	{
 		if (const UWorld* world = InComponent->GetWorld())
 		{
@@ -997,6 +1005,7 @@ public:
 			const bool bIsLODColorationView = InViewFamily.EngineShowFlags.LODColoration;
 			FPrimitiveDrawInterface* pdi = InCollector.GetPDI(viewIndex);
 			int32 drawnMeshInstances = 0;
+			int32 remainingShadowBudget = MaxDynamicShadowCasters > 0 ? MaxDynamicShadowCasters : TNumericLimits<int32>::Max();
 
 			for (const OptimizedSkeletalMesh::FMeshRenderBatch& batch : MeshBatches)
 			{
@@ -1054,9 +1063,12 @@ public:
 							*InViews[viewIndex],
 							instance,
 							bCastShadows,
+							NearFullShadowDistance,
 							MaxShadowCastDistance);
-						if (bInstanceShadowVisible)
+						const bool bInstanceShadowSelected = bInstanceShadowVisible && remainingShadowBudget > 0;
+						if (bInstanceShadowSelected)
 						{
+							--remainingShadowBudget;
 							++frameStats.ShadowVisibleInstances;
 						}
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
@@ -1075,7 +1087,7 @@ public:
 						}
 
 						visibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
-						if (bInstanceShadowVisible)
+						if (bInstanceShadowSelected)
 						{
 							shadowVisibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
 						}
@@ -1438,9 +1450,12 @@ public:
 						*InViews[viewIndex],
 						instance,
 						bCastShadows,
+						NearFullShadowDistance,
 						MaxShadowCastDistance);
-					if (bInstanceShadowVisible)
+					const bool bInstanceShadowSelected = bInstanceShadowVisible && remainingShadowBudget > 0;
+					if (bInstanceShadowSelected)
 					{
+						--remainingShadowBudget;
 						++frameStats.ShadowVisibleInstances;
 					}
 					const OptimizedSkeletalMesh::FLODResources* lodResources =
@@ -1523,7 +1538,7 @@ public:
 								mesh.Type = PT_TriangleList;
 								mesh.DepthPriorityGroup = SDPG_World;
 								mesh.bCanApplyViewModeOverrides = true;
-								mesh.CastShadow = !bIsWireframeView && bInstanceShadowVisible;
+								mesh.CastShadow = !bIsWireframeView && bInstanceShadowSelected;
 								mesh.bWireframe = bIsWireframeView;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 								mesh.VisualizeLODIndex = chosenLodIndex;
@@ -1744,7 +1759,9 @@ private:
 	bool bDrawCullingDebug = false;
 	bool bDrawCullTestBounds = true;
 	bool bCastShadows = true;
+	float NearFullShadowDistance = 1800.0f;
 	float MaxShadowCastDistance = 5000.0f;
+	int32 MaxDynamicShadowCasters = 120;
 };
 
 UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(const FObjectInitializer& InObjectInitializer)
@@ -1832,9 +1849,21 @@ void UOptimizedSkeletalMeshRenderComponent::SetCastShadows(const bool bInCastSha
 	RequestRenderRefresh();
 }
 
+void UOptimizedSkeletalMeshRenderComponent::SetNearFullShadowDistance(const float InNearFullShadowDistance)
+{
+	NearFullShadowDistance = FMath::Max(0.0f, InNearFullShadowDistance);
+	RequestRenderRefresh();
+}
+
 void UOptimizedSkeletalMeshRenderComponent::SetMaxShadowCastDistance(const float InMaxShadowCastDistance)
 {
 	MaxShadowCastDistance = FMath::Max(0.0f, InMaxShadowCastDistance);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetMaxDynamicShadowCasters(const int32 InMaxDynamicShadowCasters)
+{
+	MaxDynamicShadowCasters = FMath::Max(0, InMaxDynamicShadowCasters);
 	RequestRenderRefresh();
 }
 

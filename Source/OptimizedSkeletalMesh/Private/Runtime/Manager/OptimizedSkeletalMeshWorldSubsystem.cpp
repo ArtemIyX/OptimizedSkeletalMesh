@@ -108,7 +108,9 @@ namespace OptimizedSkeletalMesh
 		settings->bDrawCullingDebug = getInt(TEXT("osm.Render.DrawCullingDebug"), 0) != 0;
 		settings->bDrawCullTestBounds = getInt(TEXT("osm.Render.DrawCullTestBounds"), 0) != 0;
 		settings->bCastShadows = getInt(TEXT("osm.Render.CastShadows"), 1) != 0;
+		settings->NearFullShadowDistance = FMath::Max(0.0f, getFloat(TEXT("osm.Render.NearFullShadowDistance"), 1800.0f));
 		settings->MaxShadowCastDistance = FMath::Max(0.0f, getFloat(TEXT("osm.Render.MaxShadowCastDistance"), 5000.0f));
+		settings->MaxDynamicShadowCasters = FMath::Max(0, getInt(TEXT("osm.Render.MaxDynamicShadowCasters"), 120));
 #if WITH_EDITOR
 		settings->SaveConfig();
 #endif
@@ -139,7 +141,9 @@ namespace OptimizedSkeletalMesh
 		SetConsoleInt(TEXT("osm.Render.DrawCullingDebug"), InSettings.bDrawCullingDebug ? 1 : 0);
 		SetConsoleInt(TEXT("osm.Render.DrawCullTestBounds"), InSettings.bDrawCullTestBounds ? 1 : 0);
 		SetConsoleInt(TEXT("osm.Render.CastShadows"), InSettings.bCastShadows ? 1 : 0);
+		SetConsoleFloat(TEXT("osm.Render.NearFullShadowDistance"), FMath::Max(0.0f, InSettings.NearFullShadowDistance));
 		SetConsoleFloat(TEXT("osm.Render.MaxShadowCastDistance"), FMath::Max(0.0f, InSettings.MaxShadowCastDistance));
+		SetConsoleInt(TEXT("osm.Render.MaxDynamicShadowCasters"), FMath::Max(0, InSettings.MaxDynamicShadowCasters));
 	}
 
 	static FOptimizedSkeletalMeshRenderSettings BuildRenderSettingsFromProjectSettings()
@@ -157,12 +161,16 @@ namespace OptimizedSkeletalMesh
 			settings.bDrawCullingDebug = projectSettings->bDrawCullingDebug;
 			settings.bDrawCullTestBounds = projectSettings->bDrawCullTestBounds;
 			settings.bCastShadows = projectSettings->bCastShadows;
+			settings.NearFullShadowDistance = projectSettings->NearFullShadowDistance;
 			settings.MaxShadowCastDistance = projectSettings->MaxShadowCastDistance;
+			settings.MaxDynamicShadowCasters = projectSettings->MaxDynamicShadowCasters;
 		}
 
 		settings.InstanceCullBoundsScale = FMath::Max(1.0f, settings.InstanceCullBoundsScale);
 		settings.ConservativeProxyBoundsExtent = FMath::Max(1000.0f, settings.ConservativeProxyBoundsExtent);
 		settings.MaxShadowCastDistance = FMath::Max(0.0f, settings.MaxShadowCastDistance);
+		settings.NearFullShadowDistance = FMath::Max(0.0f, settings.NearFullShadowDistance);
+		settings.MaxDynamicShadowCasters = FMath::Max(0, settings.MaxDynamicShadowCasters);
 		settings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
 			FMath::Clamp(static_cast<int32>(settings.MeshDrawMode), 0, 3));
 		return settings;
@@ -248,10 +256,22 @@ namespace OptimizedSkeletalMesh
 		TEXT("bCastShadows.\n0: false, 1: true"),
 		ECVF_Default);
 
+	static TAutoConsoleVariable<float> CVarRenderNearFullShadowDistance(
+		TEXT("osm.Render.NearFullShadowDistance"),
+		1800.0f,
+		TEXT("NearFullShadowDistance.\n0 means disabled."),
+		ECVF_Default);
+
 	static TAutoConsoleVariable<float> CVarRenderMaxShadowCastDistance(
 		TEXT("osm.Render.MaxShadowCastDistance"),
 		5000.0f,
 		TEXT("MaxShadowCastDistance.\n<= 0 means no distance limit."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderMaxDynamicShadowCasters(
+		TEXT("osm.Render.MaxDynamicShadowCasters"),
+		120,
+		TEXT("MaxDynamicShadowCasters.\n<= 0 means unlimited."),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarAnimationMaxDirtyEvaluationsPerFrame(
@@ -266,7 +286,9 @@ namespace OptimizedSkeletalMesh
 		FOptimizedSkeletalMeshRenderSettings normalizedSettings = InSettings;
 		normalizedSettings.InstanceCullBoundsScale = FMath::Max(1.0f, InSettings.InstanceCullBoundsScale);
 		normalizedSettings.ConservativeProxyBoundsExtent = FMath::Max(1000.0f, InSettings.ConservativeProxyBoundsExtent);
+		normalizedSettings.NearFullShadowDistance = FMath::Max(0.0f, InSettings.NearFullShadowDistance);
 		normalizedSettings.MaxShadowCastDistance = FMath::Max(0.0f, InSettings.MaxShadowCastDistance);
+		normalizedSettings.MaxDynamicShadowCasters = FMath::Max(0, InSettings.MaxDynamicShadowCasters);
 		normalizedSettings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
 			FMath::Clamp(static_cast<int32>(InSettings.MeshDrawMode), 0, 3));
 		return normalizedSettings;
@@ -286,7 +308,9 @@ namespace OptimizedSkeletalMesh
 		resolvedSettings.bDrawCullingDebug = CVarRenderDrawCullingDebug.GetValueOnGameThread() != 0;
 		resolvedSettings.bDrawCullTestBounds = CVarRenderDrawCullTestBounds.GetValueOnGameThread() != 0;
 		resolvedSettings.bCastShadows = CVarRenderCastShadows.GetValueOnGameThread() != 0;
+		resolvedSettings.NearFullShadowDistance = CVarRenderNearFullShadowDistance.GetValueOnGameThread();
 		resolvedSettings.MaxShadowCastDistance = CVarRenderMaxShadowCastDistance.GetValueOnGameThread();
+		resolvedSettings.MaxDynamicShadowCasters = CVarRenderMaxDynamicShadowCasters.GetValueOnGameThread();
 
 		return NormalizeRenderSettings(resolvedSettings);
 	}
@@ -305,7 +329,9 @@ namespace OptimizedSkeletalMesh
 			&& InLeft.bDrawCullingDebug == InRight.bDrawCullingDebug
 			&& InLeft.bDrawCullTestBounds == InRight.bDrawCullTestBounds
 			&& InLeft.bCastShadows == InRight.bCastShadows
-			&& FMath::IsNearlyEqual(InLeft.MaxShadowCastDistance, InRight.MaxShadowCastDistance);
+			&& FMath::IsNearlyEqual(InLeft.NearFullShadowDistance, InRight.NearFullShadowDistance)
+			&& FMath::IsNearlyEqual(InLeft.MaxShadowCastDistance, InRight.MaxShadowCastDistance)
+			&& InLeft.MaxDynamicShadowCasters == InRight.MaxDynamicShadowCasters;
 	}
 
 	static void PublishAnimationStats(const FOptimizedSkeletalMeshAnimationStats& InStats)
@@ -891,7 +917,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent(UOptim
 	InComponent->SetDrawCullingDebug(ActiveRenderSettings.bDrawCullingDebug);
 	InComponent->SetDrawCullTestBounds(ActiveRenderSettings.bDrawCullTestBounds);
 	InComponent->SetCastShadows(ActiveRenderSettings.bCastShadows);
+	InComponent->SetNearFullShadowDistance(ActiveRenderSettings.NearFullShadowDistance);
 	InComponent->SetMaxShadowCastDistance(ActiveRenderSettings.MaxShadowCastDistance);
+	InComponent->SetMaxDynamicShadowCasters(ActiveRenderSettings.MaxDynamicShadowCasters);
 }
 
 const TArray<FMatrix44f>* UOptimizedSkeletalMeshWorldSubsystem::GetInstanceBonePalette(

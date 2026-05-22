@@ -104,6 +104,12 @@ public:
 	bool bCastShadows = true;
 
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0.0"))
+	float NearFullShadowDistance = 1800.0f;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0.0"))
 	float MaxShadowCastDistance = 5000.0f;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0"))
+	int32 MaxDynamicShadowCasters = 120;
 #pragma endregion
 };

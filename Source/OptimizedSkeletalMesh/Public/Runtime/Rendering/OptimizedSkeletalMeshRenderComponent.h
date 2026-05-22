@@ -135,7 +135,9 @@ public:
 	void SetDrawCullingDebug(bool bInDrawCullingDebug);
 	void SetDrawCullTestBounds(bool bInDrawCullTestBounds);
 	void SetCastShadows(bool bInCastShadows);
+	void SetNearFullShadowDistance(float InNearFullShadowDistance);
 	void SetMaxShadowCastDistance(float InMaxShadowCastDistance);
+	void SetMaxDynamicShadowCasters(int32 InMaxDynamicShadowCasters);
 	void RequestRenderRefresh();
 	bool PushBonePalettesToRenderThread();
 #pragma endregion
@@ -152,7 +154,9 @@ public:
 	bool ShouldDrawCullingDebug() const { return bDrawCullingDebug; }
 	bool ShouldDrawCullTestBounds() const { return bDrawCullTestBounds; }
 	bool ShouldCastShadows() const { return bCastShadows; }
+	float GetNearFullShadowDistance() const { return NearFullShadowDistance; }
 	float GetMaxShadowCastDistance() const { return MaxShadowCastDistance; }
+	int32 GetMaxDynamicShadowCasters() const { return MaxDynamicShadowCasters; }
 	const FOptimizedSkeletalMeshRenderStats& GetLastRenderStats() const { return LastRenderStats; }
 	void ApplyRenderStats_GameThread(const FOptimizedSkeletalMeshRenderStats& InStats);
 #pragma endregion
@@ -200,7 +204,13 @@ private:
 	bool bCastShadows = true;
 
 	UPROPERTY(Transient)
+	float NearFullShadowDistance = 1800.0f;
+
+	UPROPERTY(Transient)
 	float MaxShadowCastDistance = 5000.0f;
+
+	UPROPERTY(Transient)
+	int32 MaxDynamicShadowCasters = 120;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats", meta = (AllowPrivateAccess = "true"))
 	FOptimizedSkeletalMeshRenderStats LastRenderStats;
