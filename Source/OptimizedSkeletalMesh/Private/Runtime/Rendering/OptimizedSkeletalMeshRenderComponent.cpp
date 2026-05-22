@@ -393,6 +393,20 @@ namespace OptimizedSkeletalMesh
 		int32 LodIndex = INDEX_NONE;
 		float DistanceSquared = TNumericLimits<float>::Max();
 		bool bNearGuaranteed = false;
+		uint32 StableHash = 0;
+	};
+
+	enum class EShadowTier : uint8
+	{
+		Near = 0,
+		Mid = 1,
+		Far = 2
+	};
+
+	struct FShadowHistory
+	{
+		EShadowTier Tier = EShadowTier::Far;
+		uint64 LastTierSwitchFrame = 0;
 	};
 
 	static FRHIShaderResourceView* UploadUInt32DynamicBuffer(
@@ -823,31 +837,138 @@ namespace OptimizedSkeletalMesh
 		return FMath::Clamp(chosenLOD, 0, InNumLODs - 1);
 	}
 
+	static uint32 GetStableShadowHash(const int32 InInstanceId)
+	{
+		return GetTypeHash(InInstanceId);
+	}
+
+	static bool IsShadowDecimationFrame(const uint32 InStableHash, const uint64 InFrameCounter, const int32 InDivisor)
+	{
+		if (InDivisor <= 1)
+		{
+			return true;
+		}
+
+		return ((InFrameCounter + static_cast<uint64>(InStableHash)) % static_cast<uint64>(InDivisor)) == 0;
+	}
+
+	static EShadowTier DetermineShadowTierWithHysteresis(
+		const float InDistanceSquared,
+		const float InNearFullShadowDistance,
+		const float InMidShadowDistance,
+		const float InMaxShadowCastDistance,
+		const EShadowTier InPreviousTier)
+	{
+		const float nearDistance = FMath::Max(0.0f, InNearFullShadowDistance);
+		const float midDistance = FMath::Max(nearDistance, InMidShadowDistance);
+		const float farDistance = InMaxShadowCastDistance > 0.0f
+			? FMath::Max(midDistance, InMaxShadowCastDistance)
+			: TNumericLimits<float>::Max();
+		const float hysteresisScale = 0.18f;
+		const float nearEnterSquared = FMath::Square(nearDistance * (1.0f - hysteresisScale));
+		const float nearExitSquared = FMath::Square(nearDistance * (1.0f + hysteresisScale));
+		const float midEnterSquared = FMath::Square(midDistance * (1.0f - hysteresisScale));
+		const float midExitSquared = FMath::Square(midDistance * (1.0f + hysteresisScale));
+		const float farExitSquared = FMath::Square(farDistance * (1.0f + hysteresisScale));
+
+		switch (InPreviousTier)
+		{
+		case EShadowTier::Near:
+			if (nearDistance <= 0.0f || InDistanceSquared > nearExitSquared)
+			{
+				return InDistanceSquared <= midExitSquared ? EShadowTier::Mid : EShadowTier::Far;
+			}
+			return EShadowTier::Near;
+
+		case EShadowTier::Mid:
+			if (nearDistance > 0.0f && InDistanceSquared <= nearEnterSquared)
+			{
+				return EShadowTier::Near;
+			}
+			if (InDistanceSquared > midExitSquared)
+			{
+				return EShadowTier::Far;
+			}
+			return EShadowTier::Mid;
+
+		case EShadowTier::Far:
+		default:
+			if (midDistance > 0.0f && InDistanceSquared <= midEnterSquared)
+			{
+				if (nearDistance > 0.0f && InDistanceSquared <= nearEnterSquared)
+				{
+					return EShadowTier::Near;
+				}
+				return EShadowTier::Mid;
+			}
+			if (InMaxShadowCastDistance > 0.0f && InDistanceSquared > farExitSquared)
+			{
+				return EShadowTier::Far;
+			}
+			return EShadowTier::Far;
+		}
+	}
+
 	static bool ShouldCastShadowForInstance(
-		const FSceneView& InView,
 		const FRenderInstance& InInstance,
+		const float InDistanceSquared,
 		const bool bInCastShadows,
 		const float InNearFullShadowDistance,
-		const float InMaxShadowCastDistance)
+		const float InMidShadowDistance,
+		const int32 InMidShadowUpdateDivisor,
+		const int32 InFarShadowUpdateDivisor,
+		const float InMaxShadowCastDistance,
+		const uint64 InFrameCounter,
+		FShadowHistory& InOutHistory)
 	{
 		if (!bInCastShadows)
 		{
 			return false;
 		}
 
-		if (InMaxShadowCastDistance <= 0.0f)
+		const EShadowTier previousTier = InOutHistory.Tier;
+		const EShadowTier tier = DetermineShadowTierWithHysteresis(
+			InDistanceSquared,
+			InNearFullShadowDistance,
+			InMidShadowDistance,
+			InMaxShadowCastDistance,
+			previousTier);
+		const bool bPromotedTier = static_cast<int32>(tier) < static_cast<int32>(previousTier);
+		if (tier != previousTier)
+		{
+			InOutHistory.Tier = tier;
+			InOutHistory.LastTierSwitchFrame = InFrameCounter;
+		}
+
+		constexpr uint64 minHoldFrames = 16;
+		const bool bWithinHoldWindow = (InFrameCounter - InOutHistory.LastTierSwitchFrame) <= minHoldFrames;
+		const uint32 stableHash = GetStableShadowHash(InInstance.InstanceId);
+		if (tier == EShadowTier::Near)
 		{
 			return true;
 		}
 
-		const FVector instanceCenter = InInstance.worldBounds.GetCenter();
-		const float distanceSquared = FVector::DistSquared(InView.ViewMatrices.GetViewOrigin(), instanceCenter);
-		if (InNearFullShadowDistance > 0.0f && distanceSquared <= FMath::Square(InNearFullShadowDistance))
+		if (tier == EShadowTier::Mid)
 		{
 			return true;
 		}
 
-		return distanceSquared <= FMath::Square(InMaxShadowCastDistance);
+		if (InMaxShadowCastDistance > 0.0f && InDistanceSquared > FMath::Square(InMaxShadowCastDistance))
+		{
+			return false;
+		}
+
+		if (InFarShadowUpdateDivisor <= 0)
+		{
+			return false;
+		}
+
+		if (bWithinHoldWindow)
+		{
+			return IsShadowDecimationFrame(stableHash, InFrameCounter, FMath::Max(1, InFarShadowUpdateDivisor / 2));
+		}
+
+		return IsShadowDecimationFrame(stableHash, InFrameCounter, InFarShadowUpdateDivisor);
 	}
 } // namespace OptimizedSkeletalMesh
 
@@ -867,6 +988,9 @@ public:
 		, bDrawCullTestBounds(InComponent->ShouldDrawCullTestBounds())
 		, bCastShadows(InComponent->ShouldCastShadows())
 		, NearFullShadowDistance(InComponent->GetNearFullShadowDistance())
+		, MidShadowDistance(InComponent->GetMidShadowDistance())
+		, MidShadowUpdateDivisor(InComponent->GetMidShadowUpdateDivisor())
+		, FarShadowUpdateDivisor(InComponent->GetFarShadowUpdateDivisor())
 		, MaxShadowCastDistance(InComponent->GetMaxShadowCastDistance())
 		, MaxDynamicShadowCasters(InComponent->GetMaxDynamicShadowCasters())
 	{
@@ -1070,14 +1194,21 @@ public:
 						++frameStats.VisibleInstances;
 						const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
 						const float distanceSquared = FVector::DistSquared(viewOrigin, instance.worldBounds.GetCenter());
+						OptimizedSkeletalMesh::FShadowHistory& shadowHistory =
+							ShadowHistoryByInstanceId.FindOrAdd(instance.InstanceId);
 						const bool bNearGuaranteed = NearFullShadowDistance > 0.0f
 							&& distanceSquared <= FMath::Square(NearFullShadowDistance);
 						const bool bInstanceShadowVisible = OptimizedSkeletalMesh::ShouldCastShadowForInstance(
-							*InViews[viewIndex],
 							instance,
+							distanceSquared,
 							bCastShadows,
 							NearFullShadowDistance,
-							MaxShadowCastDistance);
+							MidShadowDistance,
+							MidShadowUpdateDivisor,
+							FarShadowUpdateDivisor,
+							MaxShadowCastDistance,
+							GFrameCounter,
+							shadowHistory);
 						if (MeshDrawMode == EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced)
 						{
 							frameStats.RenderVisibleInstanceIds.AddUnique(instance.InstanceId);
@@ -1101,6 +1232,7 @@ public:
 							candidate.LodIndex = chosenLodIndex;
 							candidate.DistanceSquared = distanceSquared;
 							candidate.bNearGuaranteed = bNearGuaranteed;
+							candidate.StableHash = OptimizedSkeletalMesh::GetStableShadowHash(instance.InstanceId);
 						}
 						++drawnMeshInstances;
 						++frameStats.DrawnInstances;
@@ -1126,7 +1258,12 @@ public:
 								return InLeft.bNearGuaranteed && !InRight.bNearGuaranteed;
 							}
 
-							return InLeft.DistanceSquared < InRight.DistanceSquared;
+							if (!FMath::IsNearlyEqual(InLeft.DistanceSquared, InRight.DistanceSquared))
+							{
+								return InLeft.DistanceSquared < InRight.DistanceSquared;
+							}
+
+							return InLeft.StableHash < InRight.StableHash;
 						});
 
 					for (const OptimizedSkeletalMesh::FShadowCandidate& candidate : shadowCandidates)
@@ -1487,14 +1624,21 @@ public:
 					++frameStats.VisibleInstances;
 					const FVector viewOrigin = InViews[viewIndex]->ViewMatrices.GetViewOrigin();
 					const float distanceSquared = FVector::DistSquared(viewOrigin, instance.worldBounds.GetCenter());
+					OptimizedSkeletalMesh::FShadowHistory& shadowHistory =
+						ShadowHistoryByInstanceId.FindOrAdd(instance.InstanceId);
 					const bool bNearGuaranteed = NearFullShadowDistance > 0.0f
 						&& distanceSquared <= FMath::Square(NearFullShadowDistance);
 					const bool bInstanceShadowVisible = OptimizedSkeletalMesh::ShouldCastShadowForInstance(
-						*InViews[viewIndex],
 						instance,
+						distanceSquared,
 						bCastShadows,
 						NearFullShadowDistance,
-						MaxShadowCastDistance);
+						MidShadowDistance,
+						MidShadowUpdateDivisor,
+						FarShadowUpdateDivisor,
+						MaxShadowCastDistance,
+						GFrameCounter,
+						shadowHistory);
 					const bool bInstanceShadowSelected = bInstanceShadowVisible
 						&& (bNearGuaranteed || remainingShadowBudget > 0);
 					if (bInstanceShadowSelected)
@@ -1797,6 +1941,7 @@ private:
 	int32 SkinningSkinWeight16BitWeightLODs = 0;
 	int32 SkinningMissingSkinWeightLODs = 0;
 	int32 SkinningGPUSkinReadyLODs = 0;
+	mutable TMap<int32, OptimizedSkeletalMesh::FShadowHistory> ShadowHistoryByInstanceId;
 	bool bDrawDebugBounds = true;
 	bool bDrawMeshSections = false;
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
@@ -1807,6 +1952,9 @@ private:
 	bool bDrawCullTestBounds = true;
 	bool bCastShadows = true;
 	float NearFullShadowDistance = 1800.0f;
+	float MidShadowDistance = 3200.0f;
+	int32 MidShadowUpdateDivisor = 2;
+	int32 FarShadowUpdateDivisor = 0;
 	float MaxShadowCastDistance = 5000.0f;
 	int32 MaxDynamicShadowCasters = 120;
 };
@@ -1899,6 +2047,24 @@ void UOptimizedSkeletalMeshRenderComponent::SetCastShadows(const bool bInCastSha
 void UOptimizedSkeletalMeshRenderComponent::SetNearFullShadowDistance(const float InNearFullShadowDistance)
 {
 	NearFullShadowDistance = FMath::Max(0.0f, InNearFullShadowDistance);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetMidShadowDistance(const float InMidShadowDistance)
+{
+	MidShadowDistance = FMath::Max(0.0f, InMidShadowDistance);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetMidShadowUpdateDivisor(const int32 InMidShadowUpdateDivisor)
+{
+	MidShadowUpdateDivisor = FMath::Max(1, InMidShadowUpdateDivisor);
+	RequestRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshRenderComponent::SetFarShadowUpdateDivisor(const int32 InFarShadowUpdateDivisor)
+{
+	FarShadowUpdateDivisor = FMath::Max(0, InFarShadowUpdateDivisor);
 	RequestRenderRefresh();
 }
 

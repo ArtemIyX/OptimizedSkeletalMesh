@@ -38,6 +38,9 @@ namespace OptimizedSkeletalMesh
 		SetConsoleInt(TEXT("osm.Render.DrawCullTestBounds"), InSettings.bDrawCullTestBounds ? 1 : 0);
 		SetConsoleInt(TEXT("osm.Render.CastShadows"), InSettings.bCastShadows ? 1 : 0);
 		SetConsoleFloat(TEXT("osm.Render.NearFullShadowDistance"), InSettings.NearFullShadowDistance);
+		SetConsoleFloat(TEXT("osm.Render.MidShadowDistance"), InSettings.MidShadowDistance);
+		SetConsoleInt(TEXT("osm.Render.MidShadowUpdateDivisor"), InSettings.MidShadowUpdateDivisor);
+		SetConsoleInt(TEXT("osm.Render.FarShadowUpdateDivisor"), InSettings.FarShadowUpdateDivisor);
 		SetConsoleFloat(TEXT("osm.Render.MaxShadowCastDistance"), InSettings.MaxShadowCastDistance);
 		SetConsoleInt(TEXT("osm.Render.MaxDynamicShadowCasters"), InSettings.MaxDynamicShadowCasters);
 	}

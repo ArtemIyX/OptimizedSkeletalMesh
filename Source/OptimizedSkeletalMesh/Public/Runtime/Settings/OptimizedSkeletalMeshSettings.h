@@ -107,6 +107,15 @@ public:
 	float NearFullShadowDistance = 1800.0f;
 
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0.0"))
+	float MidShadowDistance = 3200.0f;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "1"))
+	int32 MidShadowUpdateDivisor = 2;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0"))
+	int32 FarShadowUpdateDivisor = 0;
+
+	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0.0"))
 	float MaxShadowCastDistance = 5000.0f;
 
 	UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "Rendering", meta = (ClampMin = "0"))

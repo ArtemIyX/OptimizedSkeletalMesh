@@ -109,6 +109,9 @@ namespace OptimizedSkeletalMesh
 		settings->bDrawCullTestBounds = getInt(TEXT("osm.Render.DrawCullTestBounds"), 0) != 0;
 		settings->bCastShadows = getInt(TEXT("osm.Render.CastShadows"), 1) != 0;
 		settings->NearFullShadowDistance = FMath::Max(0.0f, getFloat(TEXT("osm.Render.NearFullShadowDistance"), 1800.0f));
+		settings->MidShadowDistance = FMath::Max(0.0f, getFloat(TEXT("osm.Render.MidShadowDistance"), 3200.0f));
+		settings->MidShadowUpdateDivisor = FMath::Max(1, getInt(TEXT("osm.Render.MidShadowUpdateDivisor"), 2));
+		settings->FarShadowUpdateDivisor = FMath::Max(0, getInt(TEXT("osm.Render.FarShadowUpdateDivisor"), 0));
 		settings->MaxShadowCastDistance = FMath::Max(0.0f, getFloat(TEXT("osm.Render.MaxShadowCastDistance"), 5000.0f));
 		settings->MaxDynamicShadowCasters = FMath::Max(0, getInt(TEXT("osm.Render.MaxDynamicShadowCasters"), 120));
 #if WITH_EDITOR
@@ -142,6 +145,9 @@ namespace OptimizedSkeletalMesh
 		SetConsoleInt(TEXT("osm.Render.DrawCullTestBounds"), InSettings.bDrawCullTestBounds ? 1 : 0);
 		SetConsoleInt(TEXT("osm.Render.CastShadows"), InSettings.bCastShadows ? 1 : 0);
 		SetConsoleFloat(TEXT("osm.Render.NearFullShadowDistance"), FMath::Max(0.0f, InSettings.NearFullShadowDistance));
+		SetConsoleFloat(TEXT("osm.Render.MidShadowDistance"), FMath::Max(0.0f, InSettings.MidShadowDistance));
+		SetConsoleInt(TEXT("osm.Render.MidShadowUpdateDivisor"), FMath::Max(1, InSettings.MidShadowUpdateDivisor));
+		SetConsoleInt(TEXT("osm.Render.FarShadowUpdateDivisor"), FMath::Max(0, InSettings.FarShadowUpdateDivisor));
 		SetConsoleFloat(TEXT("osm.Render.MaxShadowCastDistance"), FMath::Max(0.0f, InSettings.MaxShadowCastDistance));
 		SetConsoleInt(TEXT("osm.Render.MaxDynamicShadowCasters"), FMath::Max(0, InSettings.MaxDynamicShadowCasters));
 	}
@@ -162,6 +168,9 @@ namespace OptimizedSkeletalMesh
 			settings.bDrawCullTestBounds = projectSettings->bDrawCullTestBounds;
 			settings.bCastShadows = projectSettings->bCastShadows;
 			settings.NearFullShadowDistance = projectSettings->NearFullShadowDistance;
+			settings.MidShadowDistance = projectSettings->MidShadowDistance;
+			settings.MidShadowUpdateDivisor = projectSettings->MidShadowUpdateDivisor;
+			settings.FarShadowUpdateDivisor = projectSettings->FarShadowUpdateDivisor;
 			settings.MaxShadowCastDistance = projectSettings->MaxShadowCastDistance;
 			settings.MaxDynamicShadowCasters = projectSettings->MaxDynamicShadowCasters;
 		}
@@ -170,6 +179,9 @@ namespace OptimizedSkeletalMesh
 		settings.ConservativeProxyBoundsExtent = FMath::Max(1000.0f, settings.ConservativeProxyBoundsExtent);
 		settings.MaxShadowCastDistance = FMath::Max(0.0f, settings.MaxShadowCastDistance);
 		settings.NearFullShadowDistance = FMath::Max(0.0f, settings.NearFullShadowDistance);
+		settings.MidShadowDistance = FMath::Max(settings.NearFullShadowDistance, settings.MidShadowDistance);
+		settings.MidShadowUpdateDivisor = FMath::Max(1, settings.MidShadowUpdateDivisor);
+		settings.FarShadowUpdateDivisor = FMath::Max(0, settings.FarShadowUpdateDivisor);
 		settings.MaxDynamicShadowCasters = FMath::Max(0, settings.MaxDynamicShadowCasters);
 		settings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
 			FMath::Clamp(static_cast<int32>(settings.MeshDrawMode), 0, 3));
@@ -262,6 +274,24 @@ namespace OptimizedSkeletalMesh
 		TEXT("NearFullShadowDistance.\n0 means disabled."),
 		ECVF_Default);
 
+	static TAutoConsoleVariable<float> CVarRenderMidShadowDistance(
+		TEXT("osm.Render.MidShadowDistance"),
+		3200.0f,
+		TEXT("MidShadowDistance."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderMidShadowUpdateDivisor(
+		TEXT("osm.Render.MidShadowUpdateDivisor"),
+		2,
+		TEXT("MidShadowUpdateDivisor.\n1 means every frame."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarRenderFarShadowUpdateDivisor(
+		TEXT("osm.Render.FarShadowUpdateDivisor"),
+		0,
+		TEXT("FarShadowUpdateDivisor.\n0 means disabled."),
+		ECVF_Default);
+
 	static TAutoConsoleVariable<float> CVarRenderMaxShadowCastDistance(
 		TEXT("osm.Render.MaxShadowCastDistance"),
 		5000.0f,
@@ -287,6 +317,9 @@ namespace OptimizedSkeletalMesh
 		normalizedSettings.InstanceCullBoundsScale = FMath::Max(1.0f, InSettings.InstanceCullBoundsScale);
 		normalizedSettings.ConservativeProxyBoundsExtent = FMath::Max(1000.0f, InSettings.ConservativeProxyBoundsExtent);
 		normalizedSettings.NearFullShadowDistance = FMath::Max(0.0f, InSettings.NearFullShadowDistance);
+		normalizedSettings.MidShadowDistance = FMath::Max(normalizedSettings.NearFullShadowDistance, InSettings.MidShadowDistance);
+		normalizedSettings.MidShadowUpdateDivisor = FMath::Max(1, InSettings.MidShadowUpdateDivisor);
+		normalizedSettings.FarShadowUpdateDivisor = FMath::Max(0, InSettings.FarShadowUpdateDivisor);
 		normalizedSettings.MaxShadowCastDistance = FMath::Max(0.0f, InSettings.MaxShadowCastDistance);
 		normalizedSettings.MaxDynamicShadowCasters = FMath::Max(0, InSettings.MaxDynamicShadowCasters);
 		normalizedSettings.MeshDrawMode = static_cast<EOptimizedSkeletalMeshDrawMode>(
@@ -309,6 +342,9 @@ namespace OptimizedSkeletalMesh
 		resolvedSettings.bDrawCullTestBounds = CVarRenderDrawCullTestBounds.GetValueOnGameThread() != 0;
 		resolvedSettings.bCastShadows = CVarRenderCastShadows.GetValueOnGameThread() != 0;
 		resolvedSettings.NearFullShadowDistance = CVarRenderNearFullShadowDistance.GetValueOnGameThread();
+		resolvedSettings.MidShadowDistance = CVarRenderMidShadowDistance.GetValueOnGameThread();
+		resolvedSettings.MidShadowUpdateDivisor = CVarRenderMidShadowUpdateDivisor.GetValueOnGameThread();
+		resolvedSettings.FarShadowUpdateDivisor = CVarRenderFarShadowUpdateDivisor.GetValueOnGameThread();
 		resolvedSettings.MaxShadowCastDistance = CVarRenderMaxShadowCastDistance.GetValueOnGameThread();
 		resolvedSettings.MaxDynamicShadowCasters = CVarRenderMaxDynamicShadowCasters.GetValueOnGameThread();
 
@@ -330,6 +366,9 @@ namespace OptimizedSkeletalMesh
 			&& InLeft.bDrawCullTestBounds == InRight.bDrawCullTestBounds
 			&& InLeft.bCastShadows == InRight.bCastShadows
 			&& FMath::IsNearlyEqual(InLeft.NearFullShadowDistance, InRight.NearFullShadowDistance)
+			&& FMath::IsNearlyEqual(InLeft.MidShadowDistance, InRight.MidShadowDistance)
+			&& InLeft.MidShadowUpdateDivisor == InRight.MidShadowUpdateDivisor
+			&& InLeft.FarShadowUpdateDivisor == InRight.FarShadowUpdateDivisor
 			&& FMath::IsNearlyEqual(InLeft.MaxShadowCastDistance, InRight.MaxShadowCastDistance)
 			&& InLeft.MaxDynamicShadowCasters == InRight.MaxDynamicShadowCasters;
 	}
@@ -918,6 +957,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent(UOptim
 	InComponent->SetDrawCullTestBounds(ActiveRenderSettings.bDrawCullTestBounds);
 	InComponent->SetCastShadows(ActiveRenderSettings.bCastShadows);
 	InComponent->SetNearFullShadowDistance(ActiveRenderSettings.NearFullShadowDistance);
+	InComponent->SetMidShadowDistance(ActiveRenderSettings.MidShadowDistance);
+	InComponent->SetMidShadowUpdateDivisor(ActiveRenderSettings.MidShadowUpdateDivisor);
+	InComponent->SetFarShadowUpdateDivisor(ActiveRenderSettings.FarShadowUpdateDivisor);
 	InComponent->SetMaxShadowCastDistance(ActiveRenderSettings.MaxShadowCastDistance);
 	InComponent->SetMaxDynamicShadowCasters(ActiveRenderSettings.MaxDynamicShadowCasters);
 }

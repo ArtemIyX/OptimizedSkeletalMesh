@@ -210,6 +210,15 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshRenderSettings
 	float NearFullShadowDistance = 1800.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0.0"))
+	float MidShadowDistance = 3200.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "1"))
+	int32 MidShadowUpdateDivisor = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0"))
+	int32 FarShadowUpdateDivisor = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0.0"))
 	float MaxShadowCastDistance = 5000.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0"))
