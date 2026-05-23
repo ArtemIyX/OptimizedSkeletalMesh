@@ -168,6 +168,20 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceSnapshot
 	FOptimizedSkeletalMeshInstanceDesc Desc;
 };
 
+struct FOptimizedSkeletalMeshAnimationEvaluationWork
+{
+	int32 InstanceId = INDEX_NONE;
+	FOptimizedSkeletalMeshInstanceDesc Desc;
+	const FOptimizedSkeletalMeshAnimationMeshCache* MeshCache = nullptr;
+};
+
+struct FOptimizedSkeletalMeshAnimationEvaluationResult
+{
+	int32 InstanceId = INDEX_NONE;
+	TArray<FMatrix44f> BonePalette;
+	bool bSucceeded = false;
+};
+
 struct FOptimizedSkeletalMeshBonePaletteSnapshot
 {
 	FOptimizedSkeletalMeshInstanceHandle Handle;
@@ -459,6 +473,28 @@ private:
 
 #pragma region Animation
 	void TickAnimation(float InDeltaTime);
+	void InitializeAnimationStats(FOptimizedSkeletalMeshAnimationStats& OutStats, float InDeltaTime) const;
+	void FinalizeAnimationStats(FOptimizedSkeletalMeshAnimationStats& OutStats) const;
+	void BuildAnimationInstanceIdsToProcess(TArray<int32>& OutInstanceIdsToProcess, TArray<int32>& OutDirtyInstanceIdsToProcess) const;
+	void BuildAnimationEvaluationWork(
+		float InDeltaTime,
+		TConstArrayView<int32> InInstanceIdsToProcess,
+		FOptimizedSkeletalMeshAnimationStats& OutStats,
+		TArray<FOptimizedSkeletalMeshAnimationEvaluationWork>& OutEvaluationWork);
+	bool AdvanceAnimationTime(
+		int32 InInstanceId,
+		FOptimizedSkeletalMeshInstanceDesc& InOutDesc,
+		float InAnimationDeltaTime,
+		FOptimizedSkeletalMeshAnimationStats& OutStats);
+	void RemoveInstanceAnimationData(int32 InInstanceId);
+	void RunAnimationEvaluationWork(
+		const TArray<FOptimizedSkeletalMeshAnimationEvaluationWork>& InEvaluationWork,
+		FOptimizedSkeletalMeshAnimationStats& OutStats,
+		TArray<FOptimizedSkeletalMeshAnimationEvaluationResult>& OutEvaluationResults) const;
+	void ApplyAnimationEvaluationResults(
+		TArray<FOptimizedSkeletalMeshAnimationEvaluationResult>& InOutEvaluationResults,
+		FOptimizedSkeletalMeshAnimationStats& OutStats);
+	void ClearProcessedDirtyAnimationIds(TConstArrayView<int32> InProcessedDirtyInstanceIds);
 	FOptimizedSkeletalMeshAnimationMeshCache* FindOrBuildAnimationMeshCache(USkeletalMesh* InSkeletalMesh);
 	bool EvaluateInstanceBonePalette(const FOptimizedSkeletalMeshInstanceDesc& InDesc, TArray<FMatrix44f>& OutBonePalette);
 	static bool EvaluateInstanceBonePaletteWithCache(
