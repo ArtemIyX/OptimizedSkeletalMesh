@@ -1865,9 +1865,17 @@ public:
 		result.bDrawRelevance = IsShown(InView);
 		result.bDynamicRelevance = true;
 		result.bOpaque = bDrawMeshSections;
-		result.bShadowRelevance = bCastShadows;
+		result.bShadowRelevance = bCastShadows && IsShadowCast(InView);
+		result.bRenderCustomDepth = ShouldRenderCustomDepth();
+		result.bRenderInMainPass = ShouldRenderInMainPass();
+		result.bRenderInDepthPass = ShouldRenderInDepthPass();
 		result.bEditorPrimitiveRelevance = UseEditorCompositing(InView);
 		return result;
+	}
+
+	virtual bool CanBeOccluded() const override
+	{
+		return !ShouldRenderCustomDepth();
 	}
 
 	virtual uint32 GetMemoryFootprint() const override
@@ -2086,6 +2094,7 @@ UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(con
 	SetGenerateOverlapEvents(false);
 	bCastDynamicShadow = true;
 	CastShadow = true;
+	bRenderCustomDepth = true;
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetOptimizedSkeletalMeshSubsystem(
@@ -2456,6 +2465,7 @@ void UOptimizedSkeletalMeshRenderComponent::RequestRenderRefresh()
 
 FPrimitiveSceneProxy* UOptimizedSkeletalMeshRenderComponent::CreateSceneProxy()
 {
+	bRenderCustomDepth = true;
 	return new FOptimizedSkeletalMeshSceneProxy(this);
 }
 
