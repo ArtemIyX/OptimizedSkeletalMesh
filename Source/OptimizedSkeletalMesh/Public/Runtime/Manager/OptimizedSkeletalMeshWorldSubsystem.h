@@ -470,7 +470,7 @@ public:
 
 	bool IsRenderDataDirty() const
 	{
-		return bRenderDataDirty;
+		return bRenderDataDirty || bCustomDepthRenderDataDirty;
 	}
 
 	void SetExternalRenderBridgeActive(bool bInActive);
@@ -478,6 +478,7 @@ public:
 	void ClearRenderDataDirty()
 	{
 		bRenderDataDirty = false;
+		bCustomDepthRenderDataDirty = false;
 	}
 
 private:
@@ -488,6 +489,7 @@ private:
 	void RefreshActiveRenderSettings(bool bInForce);
 	void RefreshCustomDepthRenderComponents();
 	void RequestRenderRefreshForAllComponents();
+	void RequestCustomDepthRenderRefresh();
 	bool PushBonePalettesToRenderComponents();
 #pragma endregion
 
@@ -495,6 +497,7 @@ private:
 	int32 AllocateInstanceId();
 	bool IsValidInstanceId(int32 InInstanceId) const;
 	void MarkRenderDataDirty();
+	void MarkCustomDepthRenderDataDirty();
 	void RefreshAnimationTracking(int32 InInstanceId, const FOptimizedSkeletalMeshInstanceDesc& InDesc, bool bInForceDirty);
 	void RemoveAnimationTracking(int32 InInstanceId);
 	void MarkBonePaletteDirty(int32 InInstanceId);
@@ -575,6 +578,7 @@ private:
 	int32 RenderStateRecoveryAttempts = 0;
 	mutable int32 CachedVisibleRenderBatchCount = 0;
 	bool bRenderDataDirty = false;
+	bool bCustomDepthRenderDataDirty = false;
 	mutable bool bVisibleRenderBatchCountDirty = true;
 	bool bExternalRenderBridgeActive = false;
 	FOptimizedSkeletalMeshAnimationStats LastAnimationStats;

@@ -269,6 +269,28 @@ namespace OptimizedSkeletalMesh
 		uint32 boneCount = 0;
 	};
 
+	static void BuildBonePaletteRenderSnapshots(
+		TArray<FOptimizedSkeletalMeshBonePaletteSnapshot>& InSnapshots,
+		TArray<FBonePaletteRenderSnapshot>& OutRenderSnapshots)
+	{
+		OutRenderSnapshots.Reset();
+		OutRenderSnapshots.Reserve(InSnapshots.Num());
+
+		for (FOptimizedSkeletalMeshBonePaletteSnapshot& snapshot : InSnapshots)
+		{
+			if (!snapshot.Handle.IsValid() || snapshot.BonePalette.IsEmpty())
+			{
+				continue;
+			}
+
+			FBonePaletteRenderSnapshot& renderSnapshot = OutRenderSnapshots.AddDefaulted_GetRef();
+			renderSnapshot.InstanceId = snapshot.Handle.Id;
+			renderSnapshot.PreviousBonePalette = MoveTemp(snapshot.PreviousBonePalette);
+			renderSnapshot.BonePalette = MoveTemp(snapshot.BonePalette);
+			renderSnapshot.BlendAlpha = FMath::Clamp(snapshot.BlendAlpha, 0.0f, 1.0f);
+		}
+	}
+
 	struct FCachedSectionMesh
 	{
 		TArray<FDynamicMeshVertex> Vertices;
@@ -1033,6 +1055,10 @@ public:
 					++RegisteredInstanceCount;
 				}
 
+				TArray<FOptimizedSkeletalMeshBonePaletteSnapshot> paletteSnapshots;
+				Subsystem->GetBonePaletteSnapshots(paletteSnapshots);
+				OptimizedSkeletalMesh::BuildBonePaletteRenderSnapshots(paletteSnapshots, InitialBonePaletteSnapshots);
+
 				for (OptimizedSkeletalMesh::FMeshRenderBatch& batch : MeshBatches)
 				{
 					const int32 lodCount = OptimizedSkeletalMesh::GetRenderLODCount(batch.skeletalMesh);
@@ -1100,6 +1126,17 @@ public:
 	{
 		static size_t UniquePointer;
 		return reinterpret_cast<size_t>(&UniquePointer);
+	}
+
+	virtual void CreateRenderThreadResources(FRHICommandListBase& RHICmdList) override
+	{
+		if (!InitialBonePaletteSnapshots.IsEmpty())
+		{
+			UpdateBonePalettes_RenderThread(
+				FRHICommandListImmediate::Get(RHICmdList),
+				MoveTemp(InitialBonePaletteSnapshots));
+			InitialBonePaletteSnapshots.Reset();
+		}
 	}
 
 	virtual void GetDynamicMeshElements(
@@ -1255,6 +1292,21 @@ public:
 						if (!visibleInstancesByLod.IsValidIndex(chosenLodIndex))
 						{
 							continue;
+						}
+
+						if (bCustomDepthOnlyMode)
+						{
+							const OptimizedSkeletalMesh::FLODResources* chosenLodResources =
+								batch.lodResources.IsValidIndex(chosenLodIndex)
+								? batch.lodResources[chosenLodIndex].Get()
+								: nullptr;
+							if (!chosenLodResources
+								|| !chosenLodResources->DirectResources
+								|| !chosenLodResources->DirectResources->CanUseGpuSkinning()
+								|| !BonePaletteRangesByInstanceId.Contains(instance.InstanceId))
+							{
+								continue;
+							}
 						}
 
 						visibleInstancesByLod[chosenLodIndex].InInstances.Add(&instance);
@@ -2065,6 +2117,7 @@ public:
 private:
 	TWeakObjectPtr<UOptimizedSkeletalMeshRenderComponent> StatsComponent;
 	TArray<OptimizedSkeletalMesh::FMeshRenderBatch> MeshBatches;
+	TArray<OptimizedSkeletalMesh::FBonePaletteRenderSnapshot> InitialBonePaletteSnapshots;
 	TMap<int32, TArray<FMatrix44f>> BonePalettesByInstanceId;
 	TMap<int32, OptimizedSkeletalMesh::FBonePaletteRange> BonePaletteRangesByInstanceId;
 	TArray<FMatrix44f> PackedBonePalettes;
@@ -2124,6 +2177,11 @@ UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(con
 void UOptimizedSkeletalMeshRenderComponent::SetOptimizedSkeletalMeshSubsystem(
 	UOptimizedSkeletalMeshWorldSubsystem* InSubsystem)
 {
+	if (Subsystem == InSubsystem)
+	{
+		return;
+	}
+
 	Subsystem = InSubsystem;
 	RequestRenderRefresh();
 }
@@ -2427,20 +2485,10 @@ bool UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
 	}
 
 	TArray<OptimizedSkeletalMesh::FBonePaletteRenderSnapshot> renderSnapshots;
-	renderSnapshots.Reserve(paletteSnapshots.Num());
-
-	for (FOptimizedSkeletalMeshBonePaletteSnapshot& snapshot : paletteSnapshots)
+	OptimizedSkeletalMesh::BuildBonePaletteRenderSnapshots(paletteSnapshots, renderSnapshots);
+	if (renderSnapshots.IsEmpty())
 	{
-		if (!snapshot.Handle.IsValid() || snapshot.BonePalette.IsEmpty())
-		{
-			continue;
-		}
-
-		OptimizedSkeletalMesh::FBonePaletteRenderSnapshot& renderSnapshot = renderSnapshots.AddDefaulted_GetRef();
-		renderSnapshot.InstanceId = snapshot.Handle.Id;
-		renderSnapshot.PreviousBonePalette = MoveTemp(snapshot.PreviousBonePalette);
-		renderSnapshot.BonePalette = MoveTemp(snapshot.BonePalette);
-		renderSnapshot.BlendAlpha = FMath::Clamp(snapshot.BlendAlpha, 0.0f, 1.0f);
+		return false;
 	}
 
 	FOptimizedSkeletalMeshSceneProxy* optimizedSceneProxy =

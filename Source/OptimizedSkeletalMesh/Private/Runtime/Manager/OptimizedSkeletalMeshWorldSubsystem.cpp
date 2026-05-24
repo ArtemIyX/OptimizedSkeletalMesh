@@ -604,6 +604,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	LastSeenRenderCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
 	RenderStateRecoveryAttempts = 0;
 	bRenderDataDirty = false;
+	bCustomDepthRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
 	CurrentRenderSettings = OptimizedSkeletalMesh::BuildRenderSettingsFromProjectSettings();
@@ -636,6 +637,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	LastSeenRenderCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
 	RenderStateRecoveryAttempts = 0;
 	bRenderDataDirty = false;
+	bCustomDepthRenderDataDirty = false;
 	LastAnimationStats = FOptimizedSkeletalMeshAnimationStats();
 	LastRenderStats = FOptimizedSkeletalMeshRenderStats();
 	CurrentRenderSettings = OptimizedSkeletalMesh::BuildRenderSettingsFromProjectSettings();
@@ -676,7 +678,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 	}
 
 	TickAnimation(InDeltaTime);
-	if (bRenderDataDirty)
+	if (bRenderDataDirty || bCustomDepthRenderDataDirty)
 	{
 		RefreshCustomDepthRenderComponents();
 	}
@@ -691,6 +693,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 		RequestRenderRefreshForAllComponents();
 
 		ClearRenderDataDirty();
+	}
+	else if (bCustomDepthRenderDataDirty)
+	{
+		RequestCustomDepthRenderRefresh();
+		bCustomDepthRenderDataDirty = false;
 	}
 
 	DrawInstanceDebugOverlay();
@@ -708,6 +715,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::IsTickable() const
 	return !IsTemplate()
 		&& (bHasPendingRenderCVarUpdate
 			|| bRenderDataDirty
+			|| bCustomDepthRenderDataDirty
 			|| HasDirtyRenderVisibleBonePalettes()
 			|| !ActiveAnimationInstanceIds.IsEmpty()
 			|| !DirtyAnimationInstanceIds.IsEmpty());
@@ -997,7 +1005,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceCustomDepth(
 	instance->bRenderCustomDepth = bInRenderCustomDepth;
 	instance->CustomDepthStencilValue = stencilValue;
 	MarkBonePaletteDirty(InHandle.Id);
-	MarkRenderDataDirty();
+	MarkCustomDepthRenderDataDirty();
 	return true;
 }
 
@@ -1611,6 +1619,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::RefreshCustomDepthRenderComponents()
 
 	if (neededStencilValues.IsEmpty())
 	{
+		bCustomDepthRenderDataDirty = false;
 		return;
 	}
 
@@ -1626,6 +1635,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::RefreshCustomDepthRenderComponents()
 	for (const int32 stencilValue : neededStencilValues)
 	{
 		UOptimizedSkeletalMeshRenderComponent* component = nullptr;
+		bool bNewComponent = false;
 		if (TObjectPtr<UOptimizedSkeletalMeshRenderComponent>* existingComponent =
 				CustomDepthRenderComponents.Find(stencilValue))
 		{
@@ -1651,21 +1661,23 @@ void UOptimizedSkeletalMeshWorldSubsystem::RefreshCustomDepthRenderComponents()
 			component->SetupAttachment(bridgeActor->GetRootComponent());
 			bridgeActor->AddInstanceComponent(component);
 			CustomDepthRenderComponents.Add(stencilValue, component);
+			bNewComponent = true;
 		}
 
-		component->SetOptimizedSkeletalMeshSubsystem(this);
-		component->SetHiddenInGame(false, true);
-		component->SetVisibility(true, true);
-		component->SetMobility(EComponentMobility::Movable);
-		ApplyRenderSettingsToComponent(component);
-		component->SetCustomDepthOnlyMode(true, stencilValue);
+		if (bNewComponent)
+		{
+			component->SetOptimizedSkeletalMeshSubsystem(this);
+			component->SetHiddenInGame(false, true);
+			component->SetVisibility(true, true);
+			component->SetMobility(EComponentMobility::Movable);
+			ApplyRenderSettingsToComponent(component);
+			component->SetCustomDepthOnlyMode(true, stencilValue);
+		}
 
 		if (!component->IsRegistered())
 		{
 			component->RegisterComponentWithWorld(world);
 		}
-
-		component->RequestRenderRefresh();
 	}
 }
 
@@ -1676,6 +1688,11 @@ void UOptimizedSkeletalMeshWorldSubsystem::RequestRenderRefreshForAllComponents(
 		RenderComponent->RequestRenderRefresh();
 	}
 
+	RequestCustomDepthRenderRefresh();
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::RequestCustomDepthRenderRefresh()
+{
 	for (TPair<int32, TObjectPtr<UOptimizedSkeletalMeshRenderComponent>>& pair : CustomDepthRenderComponents)
 	{
 		if (UOptimizedSkeletalMeshRenderComponent* component = pair.Value.Get())
@@ -1767,12 +1784,28 @@ bool UOptimizedSkeletalMeshWorldSubsystem::IsValidInstanceId(const int32 InInsta
 void UOptimizedSkeletalMeshWorldSubsystem::MarkRenderDataDirty()
 {
 	bRenderDataDirty = true;
+	bCustomDepthRenderDataDirty = true;
 	bVisibleRenderBatchCountDirty = true;
 
 	if (BulkUpdateDepth <= 0)
 	{
 		RefreshCustomDepthRenderComponents();
 		RequestRenderRefreshForAllComponents();
+	}
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::MarkCustomDepthRenderDataDirty()
+{
+	bCustomDepthRenderDataDirty = true;
+
+	if (BulkUpdateDepth <= 0)
+	{
+		RefreshCustomDepthRenderComponents();
+		RequestCustomDepthRenderRefresh();
+		if (HasDirtyRenderVisibleBonePalettes() && PushBonePalettesToRenderComponents())
+		{
+			ClearDirtyRenderVisibleBonePalettes();
+		}
 	}
 }
 
