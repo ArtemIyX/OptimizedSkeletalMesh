@@ -422,9 +422,27 @@ namespace OptimizedSkeletalMesh
 	struct FMeshRenderBatch
 	{
 		TObjectPtr<USkeletalMesh> skeletalMesh = nullptr;
+		TObjectPtr<UMaterialInterface> MaterialOverride = nullptr;
 		TArray<FRenderInstance> InInstances;
 		TArray<TUniquePtr<FLODResources>> lodResources;
 	};
+
+	struct FRenderBatchKey
+	{
+		TObjectPtr<USkeletalMesh> skeletalMesh = nullptr;
+		TObjectPtr<UMaterialInterface> MaterialOverride = nullptr;
+
+		bool operator==(const FRenderBatchKey& InOther) const
+		{
+			return skeletalMesh == InOther.skeletalMesh
+				&& MaterialOverride == InOther.MaterialOverride;
+		}
+	};
+
+	inline uint32 GetTypeHash(const FRenderBatchKey& InKey)
+	{
+		return HashCombineFast(GetTypeHash(InKey.skeletalMesh), GetTypeHash(InKey.MaterialOverride));
+	}
 
 	struct FVisibleLODInstances
 	{
@@ -647,12 +665,19 @@ namespace OptimizedSkeletalMesh
 		return colors[InBatchIndex % UE_ARRAY_COUNT(colors)];
 	}
 
-	static const FMaterialRenderProxy* GetSectionMaterialRenderProxy(const USkeletalMesh* skeletalMesh, const FSkelMeshRenderSection& InSection)
+	static const FMaterialRenderProxy* GetSectionMaterialRenderProxy(
+		const USkeletalMesh* skeletalMesh,
+		const FSkelMeshRenderSection& InSection,
+		UMaterialInterface* InMaterialOverride = nullptr)
 	{
 		const TArray<FSkeletalMaterial>& materials = skeletalMesh->GetMaterials();
 		UMaterialInterface* material = materials.IsValidIndex(InSection.MaterialIndex)
 			? materials[InSection.MaterialIndex].MaterialInterface
 			: nullptr;
+		if (material && InMaterialOverride)
+		{
+			material = InMaterialOverride;
+		}
 
 		if (!material)
 		{
@@ -713,7 +738,11 @@ namespace OptimizedSkeletalMesh
 			: nullptr;
 	}
 
-	static void BuildCachedSectionMeshes(const USkeletalMesh* skeletalMesh, const int32 lodIndex, TArray<FCachedSectionMesh>& OutSections)
+	static void BuildCachedSectionMeshes(
+		const USkeletalMesh* skeletalMesh,
+		const int32 lodIndex,
+		TArray<FCachedSectionMesh>& OutSections,
+		UMaterialInterface* InMaterialOverride = nullptr)
 	{
 		OutSections.Reset();
 
@@ -744,7 +773,10 @@ namespace OptimizedSkeletalMesh
 			}
 
 			FCachedSectionMesh& cachedSection = OutSections.AddDefaulted_GetRef();
-			cachedSection.MaterialRenderProxy = GetSectionMaterialRenderProxy(skeletalMesh, renderSection);
+			cachedSection.MaterialRenderProxy = GetSectionMaterialRenderProxy(
+				skeletalMesh,
+				renderSection,
+				InMaterialOverride);
 			cachedSection.Vertices.Reserve(renderSection.NumVertices);
 			cachedSection.Indices.Reserve(renderSection.NumTriangles * 3);
 
@@ -899,7 +931,7 @@ namespace OptimizedSkeletalMesh
 
 	static uint32 GetStableShadowHash(const int32 InInstanceId)
 	{
-		return GetTypeHash(InInstanceId);
+		return ::GetTypeHash(InInstanceId);
 	}
 
 	static bool IsShadowDecimationFrame(const uint32 InStableHash, const uint64 InFrameCounter, const int32 InDivisor)
@@ -1028,7 +1060,7 @@ public:
 				TArray<FOptimizedSkeletalMeshInstanceSnapshot> snapshots;
 				Subsystem->GetInstancesSnapshot(snapshots);
 
-				TMap<USkeletalMesh*, int32> batchIndexByMesh;
+				TMap<OptimizedSkeletalMesh::FRenderBatchKey, int32> batchIndexByKey;
 				MeshBatches.Reserve(snapshots.Num());
 
 				for (const FOptimizedSkeletalMeshInstanceSnapshot& snapshot : snapshots)
@@ -1046,15 +1078,19 @@ public:
 					}
 
 					USkeletalMesh* skeletalMesh = snapshot.Desc.SkeletalMesh.Get();
-					int32* existingBatchIndex = batchIndexByMesh.Find(skeletalMesh);
+					OptimizedSkeletalMesh::FRenderBatchKey batchKey;
+					batchKey.skeletalMesh = skeletalMesh;
+					batchKey.MaterialOverride = snapshot.Desc.MaterialOverride;
+					int32* existingBatchIndex = batchIndexByKey.Find(batchKey);
 
 					if (!existingBatchIndex)
 					{
 						const int32 newBatchIndex = MeshBatches.Num();
 						OptimizedSkeletalMesh::FMeshRenderBatch& newBatch = MeshBatches.AddDefaulted_GetRef();
 						newBatch.skeletalMesh = skeletalMesh;
-						batchIndexByMesh.Add(skeletalMesh, newBatchIndex);
-						existingBatchIndex = batchIndexByMesh.Find(skeletalMesh);
+						newBatch.MaterialOverride = snapshot.Desc.MaterialOverride;
+						batchIndexByKey.Add(batchKey, newBatchIndex);
+						existingBatchIndex = batchIndexByKey.Find(batchKey);
 					}
 
 					OptimizedSkeletalMesh::FMeshRenderBatch& batch = MeshBatches[*existingBatchIndex];
@@ -1090,7 +1126,8 @@ public:
 								OptimizedSkeletalMesh::BuildCachedSectionMeshes(
 									batch.skeletalMesh,
 									lodIndex,
-									lodResources->Sections);
+									lodResources->Sections,
+									batch.MaterialOverride);
 							}
 							else if (lodResources->LODRenderData)
 							{
@@ -1552,7 +1589,10 @@ public:
 
 							const FMaterialRenderProxy* MaterialRenderProxy = bIsWireframeView
 								? OptimizedSkeletalMesh::GetWireframeMaterialRenderProxy()
-								: OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(batch.skeletalMesh, renderSection);
+								: OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(
+									batch.skeletalMesh,
+									renderSection,
+									batch.MaterialOverride);
 							if (!MaterialRenderProxy)
 							{
 								continue;
@@ -1885,7 +1925,10 @@ public:
 
 								const FMaterialRenderProxy* MaterialRenderProxy = bIsWireframeView
 									? OptimizedSkeletalMesh::GetWireframeMaterialRenderProxy()
-									: OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(batch.skeletalMesh, renderSection);
+									: OptimizedSkeletalMesh::GetSectionMaterialRenderProxy(
+										batch.skeletalMesh,
+										renderSection,
+										batch.MaterialOverride);
 								if (!MaterialRenderProxy)
 								{
 									continue;
@@ -2760,3 +2803,4 @@ void UOptimizedSkeletalMeshRenderComponent::GetUsedMaterials(
 		OutMaterials.AddUnique(GEngine->ShadedLevelColorationUnlitMaterial);
 	}
 }
+

@@ -1270,6 +1270,33 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceCustomDepthStencilValueByI
 		InCustomDepthStencilValue);
 }
 
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterial(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	UMaterialInterface* InMaterial)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	if (instance->MaterialOverride == InMaterial)
+	{
+		return true;
+	}
+
+	instance->MaterialOverride = InMaterial;
+	MarkRenderDataDirty();
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialById(
+	const int32 InInstanceId,
+	UMaterialInterface* InMaterial)
+{
+	return SetInstanceMaterial(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InMaterial);
+}
+
 bool UOptimizedSkeletalMeshWorldSubsystem::GetInstance(
 	FOptimizedSkeletalMeshInstanceHandle InHandle,
 	FOptimizedSkeletalMeshInstanceDesc& OutDesc) const

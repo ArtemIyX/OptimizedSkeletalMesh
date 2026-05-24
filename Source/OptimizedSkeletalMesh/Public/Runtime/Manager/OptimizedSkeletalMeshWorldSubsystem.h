@@ -10,6 +10,7 @@
 
 class USkeletalMesh;
 class UAnimSequence;
+class UMaterialInterface;
 class AActor;
 class AOptimizedSkeletalMeshRenderBridgeActor;
 class UOptimizedSkeletalMeshRenderComponent;
@@ -88,6 +89,9 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceDesc
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0", ClampMax = "255"))
 	int32 CustomDepthStencilValue = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
+	TObjectPtr<UMaterialInterface> MaterialOverride = nullptr;
 };
 
 USTRUCT(BlueprintType)
@@ -418,6 +422,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
 	bool SetInstanceCustomDepthStencilValueById(int32 InInstanceId, int32 InCustomDepthStencilValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterial(FOptimizedSkeletalMeshInstanceHandle InHandle, UMaterialInterface* InMaterial);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialById(int32 InInstanceId, UMaterialInterface* InMaterial);
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
