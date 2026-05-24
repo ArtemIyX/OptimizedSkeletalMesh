@@ -82,6 +82,12 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceDesc
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
 	bool bCastLocalLightShadows = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
+	bool bRenderCustomDepth = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering", meta = (ClampMin = "0", ClampMax = "255"))
+	int32 CustomDepthStencilValue = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -334,6 +340,32 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	int32 SetInstancesVisible(const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles, bool bInVisible);
 
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceCustomDepth(
+		FOptimizedSkeletalMeshInstanceHandle InHandle,
+		bool bInRenderCustomDepth,
+		int32 InCustomDepthStencilValue = 0);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceCustomDepthById(
+		int32 InInstanceId,
+		bool bInRenderCustomDepth,
+		int32 InCustomDepthStencilValue = 0);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceRenderCustomDepth(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInRenderCustomDepth);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceRenderCustomDepthById(int32 InInstanceId, bool bInRenderCustomDepth);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceCustomDepthStencilValue(
+		FOptimizedSkeletalMeshInstanceHandle InHandle,
+		int32 InCustomDepthStencilValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceCustomDepthStencilValueById(int32 InInstanceId, int32 InCustomDepthStencilValue);
+
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
 
@@ -454,6 +486,9 @@ private:
 	void DestroyRenderBridge();
 	void ApplyRenderSettingsToComponent();
 	void RefreshActiveRenderSettings(bool bInForce);
+	void RefreshCustomDepthRenderComponents();
+	void RequestRenderRefreshForAllComponents();
+	bool PushBonePalettesToRenderComponents();
 #pragma endregion
 
 #pragma region Instances
@@ -520,6 +555,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UOptimizedSkeletalMeshRenderComponent> RenderComponent = nullptr;
+
+	UPROPERTY(Transient)
+	TMap<int32, TObjectPtr<UOptimizedSkeletalMeshRenderComponent>> CustomDepthRenderComponents;
 
 	TMap<TObjectKey<USkeletalMesh>, FOptimizedSkeletalMeshAnimationMeshCache> AnimationMeshCaches;
 	TMap<int32, TArray<FMatrix44f>> PreviousInstanceBonePalettes;

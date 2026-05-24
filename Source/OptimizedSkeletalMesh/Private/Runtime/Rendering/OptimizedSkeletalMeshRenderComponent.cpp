@@ -957,15 +957,20 @@ public:
 	explicit FOptimizedSkeletalMeshSceneProxy(const UOptimizedSkeletalMeshRenderComponent* InComponent)
 		: FPrimitiveSceneProxy(InComponent)
 		, StatsComponent(const_cast<UOptimizedSkeletalMeshRenderComponent*>(InComponent))
-		, bDrawDebugBounds(InComponent->ShouldDrawDebugBounds())
+		, bCustomDepthOnlyMode(InComponent->IsCustomDepthOnlyMode())
+		, CustomDepthStencilValueFilter(InComponent->GetCustomDepthStencilValueFilter())
+		, bDrawDebugBounds(!bCustomDepthOnlyMode && InComponent->ShouldDrawDebugBounds())
 		, bDrawMeshSections(InComponent->ShouldDrawMeshSections())
-		, MeshDrawMode(InComponent->GetMeshDrawMode())
+		, MeshDrawMode(
+			bCustomDepthOnlyMode
+			? EOptimizedSkeletalMeshDrawMode::GpuSkinnedInstanced
+			: InComponent->GetMeshDrawMode())
 		, MaxMeshDrawInstances(InComponent->GetMaxMeshDrawInstances())
 		, bEnableInstanceFrustumCulling(InComponent->ShouldEnableInstanceFrustumCulling())
 		, InstanceCullBoundsScale(InComponent->GetInstanceCullBoundsScale())
-		, bDrawCullingDebug(InComponent->ShouldDrawCullingDebug())
-		, bDrawCullTestBounds(InComponent->ShouldDrawCullTestBounds())
-		, bCastShadows(InComponent->ShouldCastShadows())
+		, bDrawCullingDebug(!bCustomDepthOnlyMode && InComponent->ShouldDrawCullingDebug())
+		, bDrawCullTestBounds(!bCustomDepthOnlyMode && InComponent->ShouldDrawCullTestBounds())
+		, bCastShadows(!bCustomDepthOnlyMode && InComponent->ShouldCastShadows())
 		, NearFullShadowDistance(InComponent->GetNearFullShadowDistance())
 		, MidShadowDistance(InComponent->GetMidShadowDistance())
 		, MidShadowUpdateDivisor(InComponent->GetMidShadowUpdateDivisor())
@@ -994,6 +999,13 @@ public:
 				for (const FOptimizedSkeletalMeshInstanceSnapshot& snapshot : snapshots)
 				{
 					if (!snapshot.Desc.bVisible || !snapshot.Desc.SkeletalMesh)
+					{
+						continue;
+					}
+
+					if (bCustomDepthOnlyMode
+						&& (!snapshot.Desc.bRenderCustomDepth
+							|| FMath::Clamp(snapshot.Desc.CustomDepthStencilValue, 0, 255) != CustomDepthStencilValueFilter))
 					{
 						continue;
 					}
@@ -1147,10 +1159,7 @@ public:
 					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> visibleInstancesByLod;
 					visibleInstancesByLod.SetNum(batch.lodResources.Num());
 					TArray<OptimizedSkeletalMesh::FVisibleLODInstances> shadowVisibleInstancesByLod;
-					if (bCollectShadows)
-					{
-						shadowVisibleInstancesByLod.SetNum(batch.lodResources.Num());
-					}
+					shadowVisibleInstancesByLod.SetNum(batch.lodResources.Num());
 					TArray<OptimizedSkeletalMesh::FShadowCandidate> shadowCandidates;
 					if (bCollectShadows)
 					{
@@ -1524,6 +1533,12 @@ public:
 							mesh.bCanApplyViewModeOverrides = true;
 							mesh.CastShadow = false;
 							mesh.bWireframe = bIsWireframeView;
+							if (bCustomDepthOnlyMode)
+							{
+								mesh.bUseForMaterial = false;
+								mesh.bUseForDepthPass = false;
+								mesh.bUseAsOccluder = false;
+							}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 							mesh.VisualizeLODIndex = lodIndex;
 #endif
@@ -1807,6 +1822,13 @@ public:
 								mesh.bCanApplyViewModeOverrides = true;
 								mesh.CastShadow = !bIsWireframeView && bInstanceShadowSelected;
 								mesh.bWireframe = bIsWireframeView;
+								if (bCustomDepthOnlyMode)
+								{
+									mesh.CastShadow = false;
+									mesh.bUseForMaterial = false;
+									mesh.bUseForDepthPass = false;
+									mesh.bUseAsOccluder = false;
+								}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 								mesh.VisualizeLODIndex = chosenLodIndex;
 #endif
@@ -1851,7 +1873,7 @@ public:
 				}
 			}
 
-			if (!bIsShadowDepthView && !bPublishedPrimaryViewStats)
+			if (!bCustomDepthOnlyMode && !bIsShadowDepthView && !bPublishedPrimaryViewStats)
 			{
 				PublishRenderStats(frameStats);
 				bPublishedPrimaryViewStats = true;
@@ -1866,16 +1888,16 @@ public:
 		result.bDynamicRelevance = true;
 		result.bOpaque = bDrawMeshSections;
 		result.bShadowRelevance = bCastShadows && IsShadowCast(InView);
-		result.bRenderCustomDepth = ShouldRenderCustomDepth();
-		result.bRenderInMainPass = ShouldRenderInMainPass();
-		result.bRenderInDepthPass = ShouldRenderInDepthPass();
+		result.bRenderCustomDepth = bCustomDepthOnlyMode && ShouldRenderCustomDepth();
+		result.bRenderInMainPass = !bCustomDepthOnlyMode && ShouldRenderInMainPass();
+		result.bRenderInDepthPass = !bCustomDepthOnlyMode && ShouldRenderInDepthPass();
 		result.bEditorPrimitiveRelevance = UseEditorCompositing(InView);
 		return result;
 	}
 
 	virtual bool CanBeOccluded() const override
 	{
-		return !ShouldRenderCustomDepth();
+		return !bCustomDepthOnlyMode;
 	}
 
 	virtual uint32 GetMemoryFootprint() const override
@@ -2061,6 +2083,8 @@ private:
 	int32 SkinningSkinWeight16BitWeightLODs = 0;
 	int32 SkinningMissingSkinWeightLODs = 0;
 	int32 SkinningGPUSkinReadyLODs = 0;
+	bool bCustomDepthOnlyMode = false;
+	int32 CustomDepthStencilValueFilter = 0;
 	bool bDrawDebugBounds = true;
 	bool bDrawMeshSections = false;
 	EOptimizedSkeletalMeshDrawMode MeshDrawMode = EOptimizedSkeletalMeshDrawMode::DynamicMeshProof;
@@ -2094,7 +2118,7 @@ UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(con
 	SetGenerateOverlapEvents(false);
 	bCastDynamicShadow = true;
 	CastShadow = true;
-	bRenderCustomDepth = true;
+	bRenderCustomDepth = false;
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetOptimizedSkeletalMeshSubsystem(
@@ -2181,14 +2205,15 @@ void UOptimizedSkeletalMeshRenderComponent::SetDrawCullTestBounds(const bool bIn
 
 void UOptimizedSkeletalMeshRenderComponent::SetCastShadows(const bool bInCastShadows)
 {
-	if (bCastShadows == bInCastShadows)
+	const bool bShouldCastShadows = bInCastShadows && !bCustomDepthOnlyMode;
+	if (bCastShadows == bShouldCastShadows)
 	{
 		return;
 	}
 
-	bCastShadows = bInCastShadows;
-	bCastDynamicShadow = bInCastShadows;
-	CastShadow = bInCastShadows;
+	bCastShadows = bShouldCastShadows;
+	bCastDynamicShadow = bShouldCastShadows;
+	CastShadow = bShouldCastShadows;
 	RequestRenderRefresh();
 }
 
@@ -2361,6 +2386,30 @@ void UOptimizedSkeletalMeshRenderComponent::SetLocalLightMaxShadowSectionsPerLOD
 	RequestRenderRefresh();
 }
 
+void UOptimizedSkeletalMeshRenderComponent::SetCustomDepthOnlyMode(
+	const bool bInCustomDepthOnly,
+	const int32 InCustomDepthStencilValue)
+{
+	const int32 customDepthStencilValue = FMath::Clamp(InCustomDepthStencilValue, 0, 255);
+	if (bCustomDepthOnlyMode == bInCustomDepthOnly && CustomDepthStencilValueFilter == customDepthStencilValue)
+	{
+		return;
+	}
+
+	bCustomDepthOnlyMode = bInCustomDepthOnly;
+	CustomDepthStencilValueFilter = customDepthStencilValue;
+	bRenderInMainPass = !bCustomDepthOnlyMode;
+	bRenderInDepthPass = !bCustomDepthOnlyMode;
+	bRenderCustomDepth = bCustomDepthOnlyMode;
+	if (bCustomDepthOnlyMode)
+	{
+		CastShadow = false;
+		bCastDynamicShadow = false;
+	}
+	CustomDepthStencilValue = customDepthStencilValue;
+	RequestRenderRefresh();
+}
+
 bool UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
 {
 	check(IsInGameThread());
@@ -2465,7 +2514,6 @@ void UOptimizedSkeletalMeshRenderComponent::RequestRenderRefresh()
 
 FPrimitiveSceneProxy* UOptimizedSkeletalMeshRenderComponent::CreateSceneProxy()
 {
-	bRenderCustomDepth = true;
 	return new FOptimizedSkeletalMeshSceneProxy(this);
 }
 

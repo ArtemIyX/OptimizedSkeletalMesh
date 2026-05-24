@@ -161,6 +161,7 @@ public:
 	void SetLocalLightMaxDynamicShadowCasters(int32 InLocalLightMaxDynamicShadowCasters);
 	void SetLocalLightShadowLodBias(int32 InLocalLightShadowLodBias);
 	void SetLocalLightMaxShadowSectionsPerLOD(int32 InLocalLightMaxShadowSectionsPerLOD);
+	void SetCustomDepthOnlyMode(bool bInCustomDepthOnly, int32 InCustomDepthStencilValue = 0);
 	void RequestRenderRefresh();
 	bool PushBonePalettesToRenderThread();
 #pragma endregion
@@ -191,6 +192,8 @@ public:
 	int32 GetLocalLightMaxDynamicShadowCasters() const { return LocalLightMaxDynamicShadowCasters; }
 	int32 GetLocalLightShadowLodBias() const { return LocalLightShadowLodBias; }
 	int32 GetLocalLightMaxShadowSectionsPerLOD() const { return LocalLightMaxShadowSectionsPerLOD; }
+	bool IsCustomDepthOnlyMode() const { return bCustomDepthOnlyMode; }
+	int32 GetCustomDepthStencilValueFilter() const { return CustomDepthStencilValueFilter; }
 	const FOptimizedSkeletalMeshRenderStats& GetLastRenderStats() const { return LastRenderStats; }
 	void ApplyRenderStats_GameThread(const FOptimizedSkeletalMeshRenderStats& InStats);
 #pragma endregion
@@ -278,6 +281,12 @@ private:
 
 	UPROPERTY(Transient)
 	int32 LocalLightMaxShadowSectionsPerLOD = 1;
+
+	UPROPERTY(Transient)
+	bool bCustomDepthOnlyMode = false;
+
+	UPROPERTY(Transient)
+	int32 CustomDepthStencilValueFilter = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh|Stats", meta = (AllowPrivateAccess = "true"))
 	FOptimizedSkeletalMeshRenderStats LastRenderStats;
