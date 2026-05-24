@@ -320,6 +320,59 @@ public:
 	bool UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle InHandle, const FTransform& InWorldTransform);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool UpdateInstanceTransformById(int32 InInstanceId, const FTransform& InWorldTransform);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	int32 UpdateInstancesTransform(
+		const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles,
+		const TArray<FTransform>& InWorldTransforms);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	int32 UpdateInstancesTransformById(const TArray<int32>& InInstanceIds, const TArray<FTransform>& InWorldTransforms);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceLocation(FOptimizedSkeletalMeshInstanceHandle InHandle, const FVector& InWorldLocation);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceLocationById(int32 InInstanceId, const FVector& InWorldLocation);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceRotation(FOptimizedSkeletalMeshInstanceHandle InHandle, const FRotator& InWorldRotation);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceRotationById(int32 InInstanceId, const FRotator& InWorldRotation);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceScale(FOptimizedSkeletalMeshInstanceHandle InHandle, const FVector& InWorldScale3D);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceScaleById(int32 InInstanceId, const FVector& InWorldScale3D);
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceTransform(FOptimizedSkeletalMeshInstanceHandle InHandle, FTransform& OutWorldTransform) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceTransformById(int32 InInstanceId, FTransform& OutWorldTransform) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceLocation(FOptimizedSkeletalMeshInstanceHandle InHandle, FVector& OutWorldLocation) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceLocationById(int32 InInstanceId, FVector& OutWorldLocation) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceRotation(FOptimizedSkeletalMeshInstanceHandle InHandle, FRotator& OutWorldRotation) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceRotationById(int32 InInstanceId, FRotator& OutWorldRotation) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceScale(FOptimizedSkeletalMeshInstanceHandle InHandle, FVector& OutWorldScale3D) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
+	bool GetInstanceScaleById(int32 InInstanceId, FVector& OutWorldScale3D) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool UpdateInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationTime);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
@@ -491,6 +544,7 @@ private:
 	void RequestRenderRefreshForAllComponents();
 	void RequestCustomDepthRenderRefresh();
 	bool PushBonePalettesToRenderComponents();
+	bool PushInstanceTransformsToRenderComponents();
 #pragma endregion
 
 #pragma region Instances
@@ -498,6 +552,9 @@ private:
 	bool IsValidInstanceId(int32 InInstanceId) const;
 	void MarkRenderDataDirty();
 	void MarkCustomDepthRenderDataDirty();
+	void MarkTransformDirty(int32 InInstanceId);
+	bool HasDirtyTransforms() const;
+	void ClearDirtyTransforms();
 	void RefreshAnimationTracking(int32 InInstanceId, const FOptimizedSkeletalMeshInstanceDesc& InDesc, bool bInForceDirty);
 	void RemoveAnimationTracking(int32 InInstanceId);
 	void MarkBonePaletteDirty(int32 InInstanceId);
@@ -569,6 +626,7 @@ private:
 	TSet<int32> ActiveAnimationInstanceIds;
 	TSet<int32> DirtyAnimationInstanceIds;
 	TSet<int32> DirtyBonePaletteInstanceIds;
+	TSet<int32> DirtyTransformInstanceIds;
 	TSet<int32> RenderVisibleInstanceIds;
 	TMap<int32, float> AnimationUpdateAccumulators;
 

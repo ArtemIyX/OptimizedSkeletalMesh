@@ -255,6 +255,19 @@ namespace OptimizedSkeletalMesh
 		bool bCastLocalLightShadows = true;
 	};
 
+	struct FRenderInstanceTransformSnapshot
+	{
+		int32 InstanceId = INDEX_NONE;
+		FBox worldBounds;
+		FMatrix44f InLocalToWorld = FMatrix44f::Identity;
+	};
+
+	struct FRenderInstanceRef
+	{
+		int32 batchIndex = INDEX_NONE;
+		int32 instanceIndex = INDEX_NONE;
+	};
+
 	struct FBonePaletteRenderSnapshot
 	{
 		int32 InstanceId = INDEX_NONE;
@@ -1116,6 +1129,19 @@ public:
 						}
 
 						batch.lodResources.Add(MoveTemp(lodResources));
+					}
+				}
+
+				InstanceRefsById.Reserve(RegisteredInstanceCount);
+				for (int32 batchIndex = 0; batchIndex < MeshBatches.Num(); ++batchIndex)
+				{
+					const OptimizedSkeletalMesh::FMeshRenderBatch& batch = MeshBatches[batchIndex];
+					for (int32 instanceIndex = 0; instanceIndex < batch.InInstances.Num(); ++instanceIndex)
+					{
+						const int32 instanceId = batch.InInstances[instanceIndex].InstanceId;
+						OptimizedSkeletalMesh::FRenderInstanceRef& instanceRef = InstanceRefsById.FindOrAdd(instanceId);
+						instanceRef.batchIndex = batchIndex;
+						instanceRef.instanceIndex = instanceIndex;
 					}
 				}
 			}
@@ -2047,6 +2073,31 @@ public:
 		UploadBonePaletteBuffer_RenderThread(InRHICmdList);
 	}
 
+	void UpdateInstanceTransforms_RenderThread(
+		TArray<OptimizedSkeletalMesh::FRenderInstanceTransformSnapshot>&& InSnapshots)
+	{
+		check(IsInRenderingThread());
+
+		for (const OptimizedSkeletalMesh::FRenderInstanceTransformSnapshot& snapshot : InSnapshots)
+		{
+			const OptimizedSkeletalMesh::FRenderInstanceRef* instanceRef = InstanceRefsById.Find(snapshot.InstanceId);
+			if (!instanceRef || !MeshBatches.IsValidIndex(instanceRef->batchIndex))
+			{
+				continue;
+			}
+
+			OptimizedSkeletalMesh::FMeshRenderBatch& batch = MeshBatches[instanceRef->batchIndex];
+			if (!batch.InInstances.IsValidIndex(instanceRef->instanceIndex))
+			{
+				continue;
+			}
+
+			OptimizedSkeletalMesh::FRenderInstance& renderInstance = batch.InInstances[instanceRef->instanceIndex];
+			renderInstance.InLocalToWorld = snapshot.InLocalToWorld;
+			renderInstance.worldBounds = snapshot.worldBounds;
+		}
+	}
+
 	void UploadBonePaletteBuffer_RenderThread(FRHICommandListImmediate& InRHICmdList)
 	{
 		check(IsInRenderingThread());
@@ -2117,6 +2168,7 @@ public:
 private:
 	TWeakObjectPtr<UOptimizedSkeletalMeshRenderComponent> StatsComponent;
 	TArray<OptimizedSkeletalMesh::FMeshRenderBatch> MeshBatches;
+	TMap<int32, OptimizedSkeletalMesh::FRenderInstanceRef> InstanceRefsById;
 	TArray<OptimizedSkeletalMesh::FBonePaletteRenderSnapshot> InitialBonePaletteSnapshots;
 	TMap<int32, TArray<FMatrix44f>> BonePalettesByInstanceId;
 	TMap<int32, OptimizedSkeletalMesh::FBonePaletteRange> BonePaletteRangesByInstanceId;
@@ -2497,6 +2549,63 @@ bool UOptimizedSkeletalMeshRenderComponent::PushBonePalettesToRenderThread()
 	ENQUEUE_RENDER_COMMAND(UpdateOptimizedSkeletalMeshBonePalettes)(
 		[optimizedSceneProxy, renderSnapshots = MoveTemp(renderSnapshots)](FRHICommandListImmediate& InRHICmdList) mutable {
 			optimizedSceneProxy->UpdateBonePalettes_RenderThread(InRHICmdList, MoveTemp(renderSnapshots));
+		});
+
+	return true;
+}
+
+bool UOptimizedSkeletalMeshRenderComponent::PushInstanceTransformsToRenderThread(const TArray<int32>& InInstanceIds)
+{
+	check(IsInGameThread());
+
+	if (!Subsystem || !SceneProxy || InInstanceIds.IsEmpty())
+	{
+		return false;
+	}
+
+	TArray<OptimizedSkeletalMesh::FRenderInstanceTransformSnapshot> transformSnapshots;
+	transformSnapshots.Reserve(InInstanceIds.Num());
+
+	for (const int32 instanceId : InInstanceIds)
+	{
+		FOptimizedSkeletalMeshInstanceDesc instanceDesc;
+		if (!Subsystem->GetInstanceById(instanceId, instanceDesc) || !instanceDesc.SkeletalMesh)
+		{
+			continue;
+		}
+
+		if (bCustomDepthOnlyMode)
+		{
+			if (!instanceDesc.bVisible
+				|| !instanceDesc.bRenderCustomDepth
+				|| FMath::Clamp(instanceDesc.CustomDepthStencilValue, 0, 255) != CustomDepthStencilValueFilter)
+			{
+				continue;
+			}
+		}
+		else if (!instanceDesc.bVisible)
+		{
+			continue;
+		}
+
+		OptimizedSkeletalMesh::FRenderInstanceTransformSnapshot& transformSnapshot =
+			transformSnapshots.AddDefaulted_GetRef();
+		transformSnapshot.InstanceId = instanceId;
+		transformSnapshot.InLocalToWorld = FMatrix44f(instanceDesc.WorldTransform.ToMatrixWithScale());
+		transformSnapshot.worldBounds = OptimizedSkeletalMesh::GetInstanceWorldBounds(instanceDesc);
+	}
+
+	if (transformSnapshots.IsEmpty())
+	{
+		return false;
+	}
+
+	FOptimizedSkeletalMeshSceneProxy* optimizedSceneProxy =
+		static_cast<FOptimizedSkeletalMeshSceneProxy*>(SceneProxy);
+
+	ENQUEUE_RENDER_COMMAND(UpdateOptimizedSkeletalMeshInstanceTransforms)(
+		[optimizedSceneProxy, transformSnapshots = MoveTemp(transformSnapshots)](FRHICommandListImmediate& InRHICmdList) mutable {
+			optimizedSceneProxy->UpdateInstanceTransforms_RenderThread(MoveTemp(transformSnapshots));
 		});
 
 	return true;

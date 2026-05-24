@@ -596,6 +596,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	ActiveAnimationInstanceIds.Reset();
 	DirtyAnimationInstanceIds.Reset();
 	DirtyBonePaletteInstanceIds.Reset();
+	DirtyTransformInstanceIds.Reset();
 	RenderVisibleInstanceIds.Reset();
 	AnimationUpdateAccumulators.Reset();
 	ExternalRenderComponents.Reset();
@@ -629,6 +630,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	ActiveAnimationInstanceIds.Reset();
 	DirtyAnimationInstanceIds.Reset();
 	DirtyBonePaletteInstanceIds.Reset();
+	DirtyTransformInstanceIds.Reset();
 	RenderVisibleInstanceIds.Reset();
 	AnimationUpdateAccumulators.Reset();
 	ExternalRenderComponents.Reset();
@@ -693,11 +695,20 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 		RequestRenderRefreshForAllComponents();
 
 		ClearRenderDataDirty();
+		ClearDirtyTransforms();
 	}
 	else if (bCustomDepthRenderDataDirty)
 	{
 		RequestCustomDepthRenderRefresh();
 		bCustomDepthRenderDataDirty = false;
+	}
+
+	if (!bRenderDataDirty && HasDirtyTransforms())
+	{
+		if (PushInstanceTransformsToRenderComponents())
+		{
+			ClearDirtyTransforms();
+		}
 	}
 
 	DrawInstanceDebugOverlay();
@@ -716,6 +727,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::IsTickable() const
 		&& (bHasPendingRenderCVarUpdate
 			|| bRenderDataDirty
 			|| bCustomDepthRenderDataDirty
+			|| HasDirtyTransforms()
 			|| HasDirtyRenderVisibleBonePalettes()
 			|| !ActiveAnimationInstanceIds.IsEmpty()
 			|| !DirtyAnimationInstanceIds.IsEmpty());
@@ -876,10 +888,206 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UpdateInstanceTransform(
 		return false;
 	}
 
+	if (instance->WorldTransform.Equals(InWorldTransform))
+	{
+		return true;
+	}
+
 	instance->WorldTransform = InWorldTransform;
-	MarkRenderDataDirty();
+	MarkTransformDirty(InHandle.Id);
 
 	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::UpdateInstanceTransformById(
+	const int32 InInstanceId,
+	const FTransform& InWorldTransform)
+{
+	return UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InWorldTransform);
+}
+
+int32 UOptimizedSkeletalMeshWorldSubsystem::UpdateInstancesTransform(
+	const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles,
+	const TArray<FTransform>& InWorldTransforms)
+{
+	const int32 count = FMath::Min(InHandles.Num(), InWorldTransforms.Num());
+	int32 updatedCount = 0;
+	for (int32 index = 0; index < count; ++index)
+	{
+		if (UpdateInstanceTransform(InHandles[index], InWorldTransforms[index]))
+		{
+			++updatedCount;
+		}
+	}
+
+	return updatedCount;
+}
+
+int32 UOptimizedSkeletalMeshWorldSubsystem::UpdateInstancesTransformById(
+	const TArray<int32>& InInstanceIds,
+	const TArray<FTransform>& InWorldTransforms)
+{
+	const int32 count = FMath::Min(InInstanceIds.Num(), InWorldTransforms.Num());
+	int32 updatedCount = 0;
+	for (int32 index = 0; index < count; ++index)
+	{
+		if (UpdateInstanceTransformById(InInstanceIds[index], InWorldTransforms[index]))
+		{
+			++updatedCount;
+		}
+	}
+
+	return updatedCount;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceLocation(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FVector& InWorldLocation)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	FTransform transform = instance->WorldTransform;
+	transform.SetLocation(InWorldLocation);
+	return UpdateInstanceTransform(InHandle, transform);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceLocationById(
+	const int32 InInstanceId,
+	const FVector& InWorldLocation)
+{
+	return SetInstanceLocation(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InWorldLocation);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceRotation(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FRotator& InWorldRotation)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	FTransform transform = instance->WorldTransform;
+	transform.SetRotation(InWorldRotation.Quaternion());
+	return UpdateInstanceTransform(InHandle, transform);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceRotationById(
+	const int32 InInstanceId,
+	const FRotator& InWorldRotation)
+{
+	return SetInstanceRotation(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InWorldRotation);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceScale(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FVector& InWorldScale3D)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	FTransform transform = instance->WorldTransform;
+	transform.SetScale3D(InWorldScale3D);
+	return UpdateInstanceTransform(InHandle, transform);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceScaleById(
+	const int32 InInstanceId,
+	const FVector& InWorldScale3D)
+{
+	return SetInstanceScale(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InWorldScale3D);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceTransform(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	FTransform& OutWorldTransform) const
+{
+	const FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	OutWorldTransform = instance->WorldTransform;
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceTransformById(
+	const int32 InInstanceId,
+	FTransform& OutWorldTransform) const
+{
+	return GetInstanceTransform(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), OutWorldTransform);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceLocation(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	FVector& OutWorldLocation) const
+{
+	const FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	OutWorldLocation = instance->WorldTransform.GetLocation();
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceLocationById(
+	const int32 InInstanceId,
+	FVector& OutWorldLocation) const
+{
+	return GetInstanceLocation(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), OutWorldLocation);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceRotation(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	FRotator& OutWorldRotation) const
+{
+	const FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	OutWorldRotation = instance->WorldTransform.GetRotation().Rotator();
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceRotationById(
+	const int32 InInstanceId,
+	FRotator& OutWorldRotation) const
+{
+	return GetInstanceRotation(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), OutWorldRotation);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceScale(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	FVector& OutWorldScale3D) const
+{
+	const FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	OutWorldScale3D = instance->WorldTransform.GetScale3D();
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceScaleById(
+	const int32 InInstanceId,
+	FVector& OutWorldScale3D) const
+{
+	return GetInstanceScale(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), OutWorldScale3D);
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::UpdateInstanceAnimationTime(
@@ -1725,6 +1933,40 @@ bool UOptimizedSkeletalMeshWorldSubsystem::PushBonePalettesToRenderComponents()
 	return bHasComponent && bPushedAll;
 }
 
+bool UOptimizedSkeletalMeshWorldSubsystem::PushInstanceTransformsToRenderComponents()
+{
+	if (DirtyTransformInstanceIds.IsEmpty())
+	{
+		return true;
+	}
+
+	TArray<int32> dirtyInstanceIds;
+	dirtyInstanceIds.Reserve(DirtyTransformInstanceIds.Num());
+	for (const int32 instanceId : DirtyTransformInstanceIds)
+	{
+		dirtyInstanceIds.Add(instanceId);
+	}
+
+	bool bHasComponent = false;
+	bool bPushedAll = true;
+	if (RenderComponent)
+	{
+		bHasComponent = true;
+		bPushedAll &= RenderComponent->PushInstanceTransformsToRenderThread(dirtyInstanceIds);
+	}
+
+	for (TPair<int32, TObjectPtr<UOptimizedSkeletalMeshRenderComponent>>& pair : CustomDepthRenderComponents)
+	{
+		if (UOptimizedSkeletalMeshRenderComponent* component = pair.Value.Get())
+		{
+			bHasComponent = true;
+			bPushedAll &= component->PushInstanceTransformsToRenderThread(dirtyInstanceIds);
+		}
+	}
+
+	return !bHasComponent || bPushedAll;
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::ApplyRenderSettingsToComponent()
 {
 	ApplyRenderSettingsToComponent(RenderComponent);
@@ -1809,6 +2051,29 @@ void UOptimizedSkeletalMeshWorldSubsystem::MarkCustomDepthRenderDataDirty()
 	}
 }
 
+void UOptimizedSkeletalMeshWorldSubsystem::MarkTransformDirty(const int32 InInstanceId)
+{
+	DirtyTransformInstanceIds.Add(InInstanceId);
+
+	if (BulkUpdateDepth <= 0 && !bRenderDataDirty)
+	{
+		if (PushInstanceTransformsToRenderComponents())
+		{
+			ClearDirtyTransforms();
+		}
+	}
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::HasDirtyTransforms() const
+{
+	return !DirtyTransformInstanceIds.IsEmpty();
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::ClearDirtyTransforms()
+{
+	DirtyTransformInstanceIds.Reset();
+}
+
 void UOptimizedSkeletalMeshWorldSubsystem::RefreshAnimationTracking(
 	const int32 InInstanceId,
 	const FOptimizedSkeletalMeshInstanceDesc& InDesc,
@@ -1844,6 +2109,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::RemoveAnimationTracking(const int32 I
 	ActiveAnimationInstanceIds.Remove(InInstanceId);
 	DirtyAnimationInstanceIds.Remove(InInstanceId);
 	DirtyBonePaletteInstanceIds.Remove(InInstanceId);
+	DirtyTransformInstanceIds.Remove(InInstanceId);
 	RenderVisibleInstanceIds.Remove(InInstanceId);
 	PreviousInstanceBonePalettes.Remove(InInstanceId);
 	InstanceAnimationBlendAlphas.Remove(InInstanceId);

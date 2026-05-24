@@ -164,6 +164,7 @@ public:
 	void SetCustomDepthOnlyMode(bool bInCustomDepthOnly, int32 InCustomDepthStencilValue = 0);
 	void RequestRenderRefresh();
 	bool PushBonePalettesToRenderThread();
+	bool PushInstanceTransformsToRenderThread(const TArray<int32>& InInstanceIds);
 #pragma endregion
 
 #pragma region Accessors
