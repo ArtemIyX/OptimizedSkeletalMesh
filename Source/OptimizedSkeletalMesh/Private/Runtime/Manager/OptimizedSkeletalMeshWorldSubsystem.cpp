@@ -1406,37 +1406,34 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialTextureParam(
 		return false;
 	}
 
-	UMaterialInterface* baseMaterial = instance->MaterialOverride;
-	if (!baseMaterial && instance->SkeletalMesh)
+	UMaterialInstanceDynamic* materialMid = Cast<UMaterialInstanceDynamic>(instance->MaterialOverride.Get());
+	if (!materialMid)
 	{
-		const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
-		baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
-	}
-	if (!baseMaterial)
-	{
-		return false;
-	}
-
-	const FString cacheKey = FString::Printf(
-		TEXT("%s|%s|%s"),
-		*GetPathNameSafe(baseMaterial),
-		*InParameterName.ToString(),
-		*GetPathNameSafe(InTexture));
-
-	UMaterialInstanceDynamic* cachedMid = MaterialTextureOverrideCache.FindRef(cacheKey).Get();
-	if (!cachedMid)
-	{
-		cachedMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
-		if (!cachedMid)
+		UMaterialInterface* baseMaterial = instance->MaterialOverride;
+		if (!baseMaterial && instance->SkeletalMesh)
+		{
+			const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
+			baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
+		}
+		if (!baseMaterial)
 		{
 			return false;
 		}
 
-		cachedMid->SetTextureParameterValue(InParameterName, InTexture);
-		MaterialTextureOverrideCache.Add(cacheKey, cachedMid);
+		materialMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
+		if (!materialMid)
+		{
+			return false;
+		}
+
+		if (!SetInstanceMaterial(InHandle, materialMid))
+		{
+			return false;
+		}
 	}
 
-	return SetInstanceMaterial(InHandle, cachedMid);
+	materialMid->SetTextureParameterValue(InParameterName, InTexture);
+	return true;
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialTextureParamById(
@@ -1458,37 +1455,34 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialScalarParamByName(
 		return false;
 	}
 
-	UMaterialInterface* baseMaterial = instance->MaterialOverride;
-	if (!baseMaterial && instance->SkeletalMesh)
+	UMaterialInstanceDynamic* materialMid = Cast<UMaterialInstanceDynamic>(instance->MaterialOverride.Get());
+	if (!materialMid)
 	{
-		const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
-		baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
-	}
-	if (!baseMaterial)
-	{
-		return false;
-	}
-
-	const FString cacheKey = FString::Printf(
-		TEXT("%s|Scalar|%s|%.9g"),
-		*GetPathNameSafe(baseMaterial),
-		*InParameterName.ToString(),
-		static_cast<double>(InValue));
-
-	UMaterialInstanceDynamic* cachedMid = MaterialTextureOverrideCache.FindRef(cacheKey).Get();
-	if (!cachedMid)
-	{
-		cachedMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
-		if (!cachedMid)
+		UMaterialInterface* baseMaterial = instance->MaterialOverride;
+		if (!baseMaterial && instance->SkeletalMesh)
+		{
+			const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
+			baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
+		}
+		if (!baseMaterial)
 		{
 			return false;
 		}
 
-		cachedMid->SetScalarParameterValue(InParameterName, InValue);
-		MaterialTextureOverrideCache.Add(cacheKey, cachedMid);
+		materialMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
+		if (!materialMid)
+		{
+			return false;
+		}
+
+		if (!SetInstanceMaterial(InHandle, materialMid))
+		{
+			return false;
+		}
 	}
 
-	return SetInstanceMaterial(InHandle, cachedMid);
+	materialMid->SetScalarParameterValue(InParameterName, InValue);
+	return true;
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialScalarParamByNameId(
@@ -1510,39 +1504,34 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialVectorParamByName(
 		return false;
 	}
 
-	UMaterialInterface* baseMaterial = instance->MaterialOverride;
-	if (!baseMaterial && instance->SkeletalMesh)
+	UMaterialInstanceDynamic* materialMid = Cast<UMaterialInstanceDynamic>(instance->MaterialOverride.Get());
+	if (!materialMid)
 	{
-		const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
-		baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
-	}
-	if (!baseMaterial)
-	{
-		return false;
-	}
-
-	const FString cacheKey = FString::Printf(
-		TEXT("%s|Vector|%s|%.9g|%.9g|%.9g"),
-		*GetPathNameSafe(baseMaterial),
-		*InParameterName.ToString(),
-		static_cast<double>(InValue.X),
-		static_cast<double>(InValue.Y),
-		static_cast<double>(InValue.Z));
-
-	UMaterialInstanceDynamic* cachedMid = MaterialTextureOverrideCache.FindRef(cacheKey).Get();
-	if (!cachedMid)
-	{
-		cachedMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
-		if (!cachedMid)
+		UMaterialInterface* baseMaterial = instance->MaterialOverride;
+		if (!baseMaterial && instance->SkeletalMesh)
+		{
+			const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
+			baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
+		}
+		if (!baseMaterial)
 		{
 			return false;
 		}
 
-		cachedMid->SetVectorParameterValue(InParameterName, FLinearColor(InValue.X, InValue.Y, InValue.Z, 1.0f));
-		MaterialTextureOverrideCache.Add(cacheKey, cachedMid);
+		materialMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
+		if (!materialMid)
+		{
+			return false;
+		}
+
+		if (!SetInstanceMaterial(InHandle, materialMid))
+		{
+			return false;
+		}
 	}
 
-	return SetInstanceMaterial(InHandle, cachedMid);
+	materialMid->SetVectorParameterValue(InParameterName, FLinearColor(InValue.X, InValue.Y, InValue.Z, 1.0f));
+	return true;
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialVectorParamByNameId(
@@ -1603,40 +1592,34 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialColorParamByName(
 		return false;
 	}
 
-	UMaterialInterface* baseMaterial = instance->MaterialOverride;
-	if (!baseMaterial && instance->SkeletalMesh)
+	UMaterialInstanceDynamic* materialMid = Cast<UMaterialInstanceDynamic>(instance->MaterialOverride.Get());
+	if (!materialMid)
 	{
-		const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
-		baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
-	}
-	if (!baseMaterial)
-	{
-		return false;
-	}
-
-	const FString cacheKey = FString::Printf(
-		TEXT("%s|Color|%s|%.9g|%.9g|%.9g|%.9g"),
-		*GetPathNameSafe(baseMaterial),
-		*InParameterName.ToString(),
-		static_cast<double>(InValue.R),
-		static_cast<double>(InValue.G),
-		static_cast<double>(InValue.B),
-		static_cast<double>(InValue.A));
-
-	UMaterialInstanceDynamic* cachedMid = MaterialTextureOverrideCache.FindRef(cacheKey).Get();
-	if (!cachedMid)
-	{
-		cachedMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
-		if (!cachedMid)
+		UMaterialInterface* baseMaterial = instance->MaterialOverride;
+		if (!baseMaterial && instance->SkeletalMesh)
+		{
+			const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
+			baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
+		}
+		if (!baseMaterial)
 		{
 			return false;
 		}
 
-		cachedMid->SetVectorParameterValue(InParameterName, InValue);
-		MaterialTextureOverrideCache.Add(cacheKey, cachedMid);
+		materialMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
+		if (!materialMid)
+		{
+			return false;
+		}
+
+		if (!SetInstanceMaterial(InHandle, materialMid))
+		{
+			return false;
+		}
 	}
 
-	return SetInstanceMaterial(InHandle, cachedMid);
+	materialMid->SetVectorParameterValue(InParameterName, InValue);
+	return true;
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialColorParamByNameId(
