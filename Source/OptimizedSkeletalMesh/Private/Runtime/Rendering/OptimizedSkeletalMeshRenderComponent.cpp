@@ -2774,6 +2774,11 @@ void UOptimizedSkeletalMeshRenderComponent::GetUsedMaterials(
 			continue;
 		}
 
+		if (snapshot.Desc.MaterialOverride)
+		{
+			OutMaterials.AddUnique(snapshot.Desc.MaterialOverride);
+		}
+
 		for (const FSkeletalMaterial& skeletalMaterial : snapshot.Desc.SkeletalMesh->GetMaterials())
 		{
 			if (skeletalMaterial.MaterialInterface)
