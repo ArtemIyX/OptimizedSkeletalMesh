@@ -14,8 +14,11 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/Texture2D.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/Actor.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "Rendering/SkeletalMeshRenderData.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderBridgeActor.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
@@ -599,6 +602,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	DirtyTransformInstanceIds.Reset();
 	RenderVisibleInstanceIds.Reset();
 	AnimationUpdateAccumulators.Reset();
+	MaterialTextureOverrideCache.Reset();
+	NamedMaterialParamSlots.Reset();
+	NextNamedMaterialParamSlot = 0;
 	ExternalRenderComponents.Reset();
 	CustomDepthRenderComponents.Reset();
 	NextInstanceId = 1;
@@ -633,6 +639,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::Deinitialize()
 	DirtyTransformInstanceIds.Reset();
 	RenderVisibleInstanceIds.Reset();
 	AnimationUpdateAccumulators.Reset();
+	MaterialTextureOverrideCache.Reset();
+	NamedMaterialParamSlots.Reset();
+	NextNamedMaterialParamSlot = 0;
 	ExternalRenderComponents.Reset();
 	CustomDepthRenderComponents.Reset();
 	NextInstanceId = 1;
@@ -1295,6 +1304,350 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialById(
 	UMaterialInterface* InMaterial)
 {
 	return SetInstanceMaterial(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InMaterial);
+}
+
+static bool SetMaterialCustomDataValue(FOptimizedSkeletalMeshInstanceDesc& InOutDesc, const int32 InParamIndex, const float InValue)
+{
+	if (InParamIndex < 0 || InParamIndex > 7)
+	{
+		return false;
+	}
+
+	FVector4f& customData = InParamIndex < 4 ? InOutDesc.MaterialCustomData0 : InOutDesc.MaterialCustomData1;
+	const int32 vectorIndex = InParamIndex < 4 ? InParamIndex : InParamIndex - 4;
+	if (FMath::IsNearlyEqual(customData[vectorIndex], InValue))
+	{
+		return true;
+	}
+
+	customData[vectorIndex] = InValue;
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialScalarParam(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const int32 InParamIndex,
+	const float InValue)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	if (!SetMaterialCustomDataValue(*instance, InParamIndex, InValue))
+	{
+		return false;
+	}
+
+	MarkTransformDirty(InHandle.Id);
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialScalarParamById(
+	const int32 InInstanceId,
+	const int32 InParamIndex,
+	const float InValue)
+{
+	return SetInstanceMaterialScalarParam(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InParamIndex, InValue);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialVectorParam(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const int32 InStartParamIndex,
+	const FVector& InValue)
+{
+	if (InStartParamIndex < 0 || InStartParamIndex > 5)
+	{
+		return false;
+	}
+
+	const bool bX = SetInstanceMaterialScalarParam(InHandle, InStartParamIndex + 0, InValue.X);
+	const bool bY = SetInstanceMaterialScalarParam(InHandle, InStartParamIndex + 1, InValue.Y);
+	const bool bZ = SetInstanceMaterialScalarParam(InHandle, InStartParamIndex + 2, InValue.Z);
+	return bX && bY && bZ;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialVectorParamById(
+	const int32 InInstanceId,
+	const int32 InStartParamIndex,
+	const FVector& InValue)
+{
+	return SetInstanceMaterialVectorParam(
+		FOptimizedSkeletalMeshInstanceHandle(InInstanceId),
+		InStartParamIndex,
+		InValue);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialBoolParam(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const int32 InParamIndex,
+	const bool bInValue)
+{
+	return SetInstanceMaterialScalarParam(InHandle, InParamIndex, bInValue ? 1.0f : 0.0f);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialBoolParamById(
+	const int32 InInstanceId,
+	const int32 InParamIndex,
+	const bool bInValue)
+{
+	return SetInstanceMaterialBoolParam(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InParamIndex, bInValue);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialTextureParam(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FName InParameterName,
+	UTexture2D* InTexture)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance || InParameterName.IsNone() || !InTexture)
+	{
+		return false;
+	}
+
+	UMaterialInterface* baseMaterial = instance->MaterialOverride;
+	if (!baseMaterial && instance->SkeletalMesh)
+	{
+		const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
+		baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
+	}
+	if (!baseMaterial)
+	{
+		return false;
+	}
+
+	const FString cacheKey = FString::Printf(
+		TEXT("%s|%s|%s"),
+		*GetPathNameSafe(baseMaterial),
+		*InParameterName.ToString(),
+		*GetPathNameSafe(InTexture));
+
+	UMaterialInstanceDynamic* cachedMid = MaterialTextureOverrideCache.FindRef(cacheKey).Get();
+	if (!cachedMid)
+	{
+		cachedMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
+		if (!cachedMid)
+		{
+			return false;
+		}
+
+		cachedMid->SetTextureParameterValue(InParameterName, InTexture);
+		MaterialTextureOverrideCache.Add(cacheKey, cachedMid);
+	}
+
+	return SetInstanceMaterial(InHandle, cachedMid);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialTextureParamById(
+	const int32 InInstanceId,
+	const FName InParameterName,
+	UTexture2D* InTexture)
+{
+	return SetInstanceMaterialTextureParam(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InParameterName, InTexture);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialScalarParamByName(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FName InParameterName,
+	const float InValue)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance || InParameterName.IsNone())
+	{
+		return false;
+	}
+
+	UMaterialInterface* baseMaterial = instance->MaterialOverride;
+	if (!baseMaterial && instance->SkeletalMesh)
+	{
+		const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
+		baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
+	}
+	if (!baseMaterial)
+	{
+		return false;
+	}
+
+	const FString cacheKey = FString::Printf(
+		TEXT("%s|Scalar|%s|%.9g"),
+		*GetPathNameSafe(baseMaterial),
+		*InParameterName.ToString(),
+		static_cast<double>(InValue));
+
+	UMaterialInstanceDynamic* cachedMid = MaterialTextureOverrideCache.FindRef(cacheKey).Get();
+	if (!cachedMid)
+	{
+		cachedMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
+		if (!cachedMid)
+		{
+			return false;
+		}
+
+		cachedMid->SetScalarParameterValue(InParameterName, InValue);
+		MaterialTextureOverrideCache.Add(cacheKey, cachedMid);
+	}
+
+	return SetInstanceMaterial(InHandle, cachedMid);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialScalarParamByNameId(
+	const int32 InInstanceId,
+	const FName InParameterName,
+	const float InValue)
+{
+	return SetInstanceMaterialScalarParamByName(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InParameterName, InValue);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialVectorParamByName(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FName InParameterName,
+	const FVector& InValue)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance || InParameterName.IsNone())
+	{
+		return false;
+	}
+
+	UMaterialInterface* baseMaterial = instance->MaterialOverride;
+	if (!baseMaterial && instance->SkeletalMesh)
+	{
+		const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
+		baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
+	}
+	if (!baseMaterial)
+	{
+		return false;
+	}
+
+	const FString cacheKey = FString::Printf(
+		TEXT("%s|Vector|%s|%.9g|%.9g|%.9g"),
+		*GetPathNameSafe(baseMaterial),
+		*InParameterName.ToString(),
+		static_cast<double>(InValue.X),
+		static_cast<double>(InValue.Y),
+		static_cast<double>(InValue.Z));
+
+	UMaterialInstanceDynamic* cachedMid = MaterialTextureOverrideCache.FindRef(cacheKey).Get();
+	if (!cachedMid)
+	{
+		cachedMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
+		if (!cachedMid)
+		{
+			return false;
+		}
+
+		cachedMid->SetVectorParameterValue(InParameterName, FLinearColor(InValue.X, InValue.Y, InValue.Z, 1.0f));
+		MaterialTextureOverrideCache.Add(cacheKey, cachedMid);
+	}
+
+	return SetInstanceMaterial(InHandle, cachedMid);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialVectorParamByNameId(
+	const int32 InInstanceId,
+	const FName InParameterName,
+	const FVector& InValue)
+{
+	return SetInstanceMaterialVectorParamByName(
+		FOptimizedSkeletalMeshInstanceHandle(InInstanceId),
+		InParameterName,
+		InValue);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialBoolParamByName(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FName InParameterName,
+	const bool bInValue)
+{
+	return SetInstanceMaterialScalarParamByName(InHandle, InParameterName, bInValue ? 1.0f : 0.0f);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialBoolParamByNameId(
+	const int32 InInstanceId,
+	const FName InParameterName,
+	const bool bInValue)
+{
+	return SetInstanceMaterialBoolParamByName(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InParameterName, bInValue);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialColorParam(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const int32 InStartParamIndex,
+	const FLinearColor& InValue)
+{
+	const bool bX = SetInstanceMaterialScalarParam(InHandle, InStartParamIndex + 0, InValue.R);
+	const bool bY = SetInstanceMaterialScalarParam(InHandle, InStartParamIndex + 1, InValue.G);
+	const bool bZ = SetInstanceMaterialScalarParam(InHandle, InStartParamIndex + 2, InValue.B);
+	const bool bW = SetInstanceMaterialScalarParam(InHandle, InStartParamIndex + 3, InValue.A);
+	return bX && bY && bZ && bW;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialColorParamById(
+	const int32 InInstanceId,
+	const int32 InStartParamIndex,
+	const FLinearColor& InValue)
+{
+	return SetInstanceMaterialColorParam(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InStartParamIndex, InValue);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialColorParamByName(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FName InParameterName,
+	const FLinearColor& InValue)
+{
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance || InParameterName.IsNone())
+	{
+		return false;
+	}
+
+	UMaterialInterface* baseMaterial = instance->MaterialOverride;
+	if (!baseMaterial && instance->SkeletalMesh)
+	{
+		const TArray<FSkeletalMaterial>& materials = instance->SkeletalMesh->GetMaterials();
+		baseMaterial = materials.IsEmpty() ? nullptr : materials[0].MaterialInterface;
+	}
+	if (!baseMaterial)
+	{
+		return false;
+	}
+
+	const FString cacheKey = FString::Printf(
+		TEXT("%s|Color|%s|%.9g|%.9g|%.9g|%.9g"),
+		*GetPathNameSafe(baseMaterial),
+		*InParameterName.ToString(),
+		static_cast<double>(InValue.R),
+		static_cast<double>(InValue.G),
+		static_cast<double>(InValue.B),
+		static_cast<double>(InValue.A));
+
+	UMaterialInstanceDynamic* cachedMid = MaterialTextureOverrideCache.FindRef(cacheKey).Get();
+	if (!cachedMid)
+	{
+		cachedMid = UMaterialInstanceDynamic::Create(baseMaterial, this);
+		if (!cachedMid)
+		{
+			return false;
+		}
+
+		cachedMid->SetVectorParameterValue(InParameterName, InValue);
+		MaterialTextureOverrideCache.Add(cacheKey, cachedMid);
+	}
+
+	return SetInstanceMaterial(InHandle, cachedMid);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterialColorParamByNameId(
+	const int32 InInstanceId,
+	const FName InParameterName,
+	const FLinearColor& InValue)
+{
+	return SetInstanceMaterialColorParamByName(
+		FOptimizedSkeletalMeshInstanceHandle(InInstanceId),
+		InParameterName,
+		InValue);
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::GetInstance(
@@ -2156,6 +2509,40 @@ bool UOptimizedSkeletalMeshWorldSubsystem::HasDirtyRenderVisibleBonePalettes() c
 void UOptimizedSkeletalMeshWorldSubsystem::ClearDirtyRenderVisibleBonePalettes()
 {
 	DirtyBonePaletteInstanceIds.Reset();
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::ResolveNamedMaterialParamSlot(
+	const FName InParameterName,
+	const int32 InWidth,
+	int32& OutStartIndex)
+{
+	OutStartIndex = INDEX_NONE;
+	if (InParameterName.IsNone() || InWidth <= 0 || InWidth > 8)
+	{
+		return false;
+	}
+
+	if (const FIntPoint* existingSlot = NamedMaterialParamSlots.Find(InParameterName))
+	{
+		if (existingSlot->Y != InWidth)
+		{
+			return false;
+		}
+
+		OutStartIndex = existingSlot->X;
+		return true;
+	}
+
+	if (NextNamedMaterialParamSlot + InWidth > 8)
+	{
+		return false;
+	}
+
+	const int32 startIndex = NextNamedMaterialParamSlot;
+	NamedMaterialParamSlots.Add(InParameterName, FIntPoint(startIndex, InWidth));
+	NextNamedMaterialParamSlot += InWidth;
+	OutStartIndex = startIndex;
+	return true;
 }
 
 float UOptimizedSkeletalMeshWorldSubsystem::GetEffectiveAnimationUpdateRateHz(

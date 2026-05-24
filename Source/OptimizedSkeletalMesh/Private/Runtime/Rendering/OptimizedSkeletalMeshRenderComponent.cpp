@@ -253,6 +253,8 @@ namespace OptimizedSkeletalMesh
 		int32 ForcedLODIndex = 0;
 		bool bAutoLOD = true;
 		bool bCastLocalLightShadows = true;
+		FVector4f MaterialCustomData0 = FVector4f::Zero();
+		FVector4f MaterialCustomData1 = FVector4f::Zero();
 	};
 
 	struct FRenderInstanceTransformSnapshot
@@ -260,6 +262,8 @@ namespace OptimizedSkeletalMesh
 		int32 InstanceId = INDEX_NONE;
 		FBox worldBounds;
 		FMatrix44f InLocalToWorld = FMatrix44f::Identity;
+		FVector4f MaterialCustomData0 = FVector4f::Zero();
+		FVector4f MaterialCustomData1 = FVector4f::Zero();
 	};
 
 	struct FRenderInstanceRef
@@ -625,6 +629,9 @@ namespace OptimizedSkeletalMesh
 		TArray<FInstanceSceneData>& instanceSceneData =
 			InCollector.AllocateOneFrameResource<TArray<FInstanceSceneData>>();
 		instanceSceneData.Reserve(InInstances.Num());
+		TArray<float>& instanceCustomData =
+			InCollector.AllocateOneFrameResource<TArray<float>>();
+		instanceCustomData.Reserve(InInstances.Num() * 8);
 
 		for (const FRenderInstance* instance : InInstances)
 		{
@@ -635,6 +642,14 @@ namespace OptimizedSkeletalMesh
 
 			FInstanceSceneData& sceneData = instanceSceneData.AddDefaulted_GetRef();
 			sceneData.LocalToPrimitive = FRenderTransform(instance->InLocalToWorld);
+			instanceCustomData.Add(instance->MaterialCustomData0.X);
+			instanceCustomData.Add(instance->MaterialCustomData0.Y);
+			instanceCustomData.Add(instance->MaterialCustomData0.Z);
+			instanceCustomData.Add(instance->MaterialCustomData0.W);
+			instanceCustomData.Add(instance->MaterialCustomData1.X);
+			instanceCustomData.Add(instance->MaterialCustomData1.Y);
+			instanceCustomData.Add(instance->MaterialCustomData1.Z);
+			instanceCustomData.Add(instance->MaterialCustomData1.W);
 			OutWorldBounds += instance->worldBounds;
 		}
 
@@ -646,6 +661,8 @@ namespace OptimizedSkeletalMesh
 		FMeshBatchDynamicPrimitiveData& dynamicPrimitiveData =
 			InCollector.AllocateOneFrameResource<FMeshBatchDynamicPrimitiveData>();
 		dynamicPrimitiveData.InstanceSceneData = MakeArrayView(instanceSceneData);
+		dynamicPrimitiveData.InstanceCustomData = MakeArrayView(instanceCustomData);
+		dynamicPrimitiveData.SetNumInstanceCustomDataFloats(8);
 		OutDynamicPrimitiveData = &dynamicPrimitiveData;
 	}
 
@@ -1101,6 +1118,8 @@ public:
 					renderInstance.ForcedLODIndex = FMath::Max(0, snapshot.Desc.LODIndex);
 					renderInstance.bAutoLOD = snapshot.Desc.bAutoLOD;
 					renderInstance.bCastLocalLightShadows = snapshot.Desc.bCastLocalLightShadows;
+					renderInstance.MaterialCustomData0 = snapshot.Desc.MaterialCustomData0;
+					renderInstance.MaterialCustomData1 = snapshot.Desc.MaterialCustomData1;
 					++RegisteredInstanceCount;
 				}
 
@@ -2138,6 +2157,8 @@ public:
 			OptimizedSkeletalMesh::FRenderInstance& renderInstance = batch.InInstances[instanceRef->instanceIndex];
 			renderInstance.InLocalToWorld = snapshot.InLocalToWorld;
 			renderInstance.worldBounds = snapshot.worldBounds;
+			renderInstance.MaterialCustomData0 = snapshot.MaterialCustomData0;
+			renderInstance.MaterialCustomData1 = snapshot.MaterialCustomData1;
 		}
 	}
 
@@ -2636,6 +2657,8 @@ bool UOptimizedSkeletalMeshRenderComponent::PushInstanceTransformsToRenderThread
 		transformSnapshot.InstanceId = instanceId;
 		transformSnapshot.InLocalToWorld = FMatrix44f(instanceDesc.WorldTransform.ToMatrixWithScale());
 		transformSnapshot.worldBounds = OptimizedSkeletalMesh::GetInstanceWorldBounds(instanceDesc);
+		transformSnapshot.MaterialCustomData0 = instanceDesc.MaterialCustomData0;
+		transformSnapshot.MaterialCustomData1 = instanceDesc.MaterialCustomData1;
 	}
 
 	if (transformSnapshots.IsEmpty())

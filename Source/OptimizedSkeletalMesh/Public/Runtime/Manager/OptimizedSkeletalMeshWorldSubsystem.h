@@ -11,6 +11,8 @@
 class USkeletalMesh;
 class UAnimSequence;
 class UMaterialInterface;
+class UMaterialInstanceDynamic;
+class UTexture2D;
 class AActor;
 class AOptimizedSkeletalMeshRenderBridgeActor;
 class UOptimizedSkeletalMeshRenderComponent;
@@ -92,6 +94,12 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceDesc
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
 	TObjectPtr<UMaterialInterface> MaterialOverride = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
+	FVector4f MaterialCustomData0 = FVector4f::Zero();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Rendering")
+	FVector4f MaterialCustomData1 = FVector4f::Zero();
 };
 
 USTRUCT(BlueprintType)
@@ -429,6 +437,72 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
 	bool SetInstanceMaterialById(int32 InInstanceId, UMaterialInterface* InMaterial);
 
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialScalarParam(FOptimizedSkeletalMeshInstanceHandle InHandle, int32 InParamIndex, float InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialScalarParamById(int32 InInstanceId, int32 InParamIndex, float InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialVectorParam(FOptimizedSkeletalMeshInstanceHandle InHandle, int32 InStartParamIndex, const FVector& InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialVectorParamById(int32 InInstanceId, int32 InStartParamIndex, const FVector& InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialBoolParam(FOptimizedSkeletalMeshInstanceHandle InHandle, int32 InParamIndex, bool bInValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialBoolParamById(int32 InInstanceId, int32 InParamIndex, bool bInValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialTextureParam(
+		FOptimizedSkeletalMeshInstanceHandle InHandle,
+		FName InParameterName,
+		UTexture2D* InTexture);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialTextureParamById(int32 InInstanceId, FName InParameterName, UTexture2D* InTexture);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialScalarParamByName(FOptimizedSkeletalMeshInstanceHandle InHandle, FName InParameterName, float InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialScalarParamByNameId(int32 InInstanceId, FName InParameterName, float InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialVectorParamByName(
+		FOptimizedSkeletalMeshInstanceHandle InHandle,
+		FName InParameterName,
+		const FVector& InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialVectorParamByNameId(int32 InInstanceId, FName InParameterName, const FVector& InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialBoolParamByName(FOptimizedSkeletalMeshInstanceHandle InHandle, FName InParameterName, bool bInValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialBoolParamByNameId(int32 InInstanceId, FName InParameterName, bool bInValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialColorParam(
+		FOptimizedSkeletalMeshInstanceHandle InHandle,
+		int32 InStartParamIndex,
+		const FLinearColor& InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialColorParamById(int32 InInstanceId, int32 InStartParamIndex, const FLinearColor& InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialColorParamByName(
+		FOptimizedSkeletalMeshInstanceHandle InHandle,
+		FName InParameterName,
+		const FLinearColor& InValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
+	bool SetInstanceMaterialColorParamByNameId(int32 InInstanceId, FName InParameterName, const FLinearColor& InValue);
+
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
 
@@ -570,6 +644,7 @@ private:
 	void MarkBonePaletteDirty(int32 InInstanceId);
 	bool HasDirtyRenderVisibleBonePalettes() const;
 	void ClearDirtyRenderVisibleBonePalettes();
+	bool ResolveNamedMaterialParamSlot(FName InParameterName, int32 InWidth, int32& OutStartIndex);
 	float GetEffectiveAnimationUpdateRateHz(const FOptimizedSkeletalMeshInstanceDesc& InDesc, float InNearestCameraDistance) const;
 	static float GetUpdateRateScaleForDistance(float InDistance);
 	bool GetNearestCameraDistance(const FVector& InWorldLocation, float& OutDistance) const;
@@ -628,6 +703,14 @@ private:
 
 	UPROPERTY(Transient)
 	TMap<int32, TObjectPtr<UOptimizedSkeletalMeshRenderComponent>> CustomDepthRenderComponents;
+
+	UPROPERTY(Transient)
+	TMap<FString, TObjectPtr<UMaterialInstanceDynamic>> MaterialTextureOverrideCache;
+
+	UPROPERTY(Transient)
+	TMap<FName, FIntPoint> NamedMaterialParamSlots;
+
+	int32 NextNamedMaterialParamSlot = 0;
 
 	TMap<TObjectKey<USkeletalMesh>, FOptimizedSkeletalMeshAnimationMeshCache> AnimationMeshCaches;
 	TMap<int32, TArray<FMatrix44f>> PreviousInstanceBonePalettes;
