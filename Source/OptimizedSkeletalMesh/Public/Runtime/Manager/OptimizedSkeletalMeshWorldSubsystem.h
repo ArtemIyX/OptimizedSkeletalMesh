@@ -242,7 +242,63 @@ public:
 		UPARAM(DisplayName = "Instance Id") int32 InInstanceId,
 		UPARAM(DisplayName = "Socket Name") FName InSocketName,
 		FTransform& OutWorldTransform) const;
-#pragma endregion
+	#pragma endregion
+
+	#pragma region InstanceAttachment
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Attach Instance To Instance", Keywords = "attach socket weapon child parent"))
+	bool AttachInstanceToInstance(
+		UPARAM(DisplayName = "Child Handle") FOptimizedSkeletalMeshInstanceHandle InChildHandle,
+		UPARAM(DisplayName = "Parent Handle") FOptimizedSkeletalMeshInstanceHandle InParentHandle,
+		UPARAM(DisplayName = "Socket Name") FName InSocketName,
+		UPARAM(DisplayName = "Attachment") const FOptimizedSkeletalMeshInstanceAttachment& InAttachment,
+		UPARAM(DisplayName = "Snap Now") bool bInSnapNow = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Attach Instance To Instance By Id", Keywords = "attach socket weapon child parent"))
+	bool AttachInstanceToInstanceById(
+		UPARAM(DisplayName = "Child Instance Id") int32 InChildInstanceId,
+		UPARAM(DisplayName = "Parent Instance Id") int32 InParentInstanceId,
+		UPARAM(DisplayName = "Socket Name") FName InSocketName,
+		UPARAM(DisplayName = "Attachment") const FOptimizedSkeletalMeshInstanceAttachment& InAttachment,
+		UPARAM(DisplayName = "Snap Now") bool bInSnapNow = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Detach Instance", Keywords = "detach unattach child"))
+	bool DetachInstance(UPARAM(DisplayName = "Child Handle") FOptimizedSkeletalMeshInstanceHandle InChildHandle);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Detach Instance By Id", Keywords = "detach unattach child"))
+	bool DetachInstanceById(UPARAM(DisplayName = "Child Instance Id") int32 InChildInstanceId);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Detach Children", Keywords = "detach children parent"))
+	int32 DetachChildren(UPARAM(DisplayName = "Parent Handle") FOptimizedSkeletalMeshInstanceHandle InParentHandle);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Detach Children By Id", Keywords = "detach children parent"))
+	int32 DetachChildrenById(UPARAM(DisplayName = "Parent Instance Id") int32 InParentInstanceId);
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Is Instance Attached", Keywords = "is attached"))
+	bool IsInstanceAttached(UPARAM(DisplayName = "Child Handle") FOptimizedSkeletalMeshInstanceHandle InChildHandle) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Is Instance Attached By Id", Keywords = "is attached"))
+	bool IsInstanceAttachedById(UPARAM(DisplayName = "Child Instance Id") int32 InChildInstanceId) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Get Instance Attachment", Keywords = "get attachment parent socket"))
+	bool GetInstanceAttachment(
+		UPARAM(DisplayName = "Child Handle") FOptimizedSkeletalMeshInstanceHandle InChildHandle,
+		FOptimizedSkeletalMeshInstanceAttachment& OutAttachment) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Get Instance Attachment By Id", Keywords = "get attachment parent socket"))
+	bool GetInstanceAttachmentById(
+		UPARAM(DisplayName = "Child Instance Id") int32 InChildInstanceId,
+		FOptimizedSkeletalMeshInstanceAttachment& OutAttachment) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Set Attachment Follow Rotation", Keywords = "attach follow rotation"))
+	bool SetAttachmentFollowRotation(
+		UPARAM(DisplayName = "Child Handle") FOptimizedSkeletalMeshInstanceHandle InChildHandle,
+		UPARAM(DisplayName = "Follow Rotation") bool bInFollowRotation);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Attachment", meta = (DisplayName = "Set Attachment Follow Rotation By Id", Keywords = "attach follow rotation"))
+	bool SetAttachmentFollowRotationById(
+		UPARAM(DisplayName = "Child Instance Id") int32 InChildInstanceId,
+		UPARAM(DisplayName = "Follow Rotation") bool bInFollowRotation);
+	#pragma endregion
 
 	#pragma region InstanceAnimation
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Asset", Keywords = "instance animation play pause stop loop rate time"))
@@ -382,6 +438,16 @@ private:
 	void MarkBonePaletteDirty(int32 InInstanceId);
 	bool HasDirtyRenderVisibleBonePalettes() const;
 	void ClearDirtyRenderVisibleBonePalettes();
+	bool AttachInstanceInternal(
+		int32 InChildInstanceId,
+		int32 InParentInstanceId,
+		FName InSocketName,
+		const FOptimizedSkeletalMeshInstanceAttachment& InAttachment,
+		bool bInSnapNow);
+	bool DetachInstanceInternal(int32 InChildInstanceId);
+	bool WouldCreateAttachmentCycle(int32 InChildInstanceId, int32 InParentInstanceId) const;
+	void RemoveAttachmentMapsForChild(int32 InChildInstanceId);
+	void RemoveAttachmentMapsForParent(int32 InParentInstanceId);
 	bool ResolveNamedMaterialParamSlot(FName InParameterName, int32 InWidth, int32& OutStartIndex);
 	float GetEffectiveAnimationUpdateRateHz(const FOptimizedSkeletalMeshInstanceDesc& InDesc, float InNearestCameraDistance) const;
 	static float GetUpdateRateScaleForDistance(float InDistance);

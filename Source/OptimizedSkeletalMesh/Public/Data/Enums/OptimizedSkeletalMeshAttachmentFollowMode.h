@@ -5,6 +5,9 @@
 #include "CoreMinimal.h"
 #include "OptimizedSkeletalMeshAttachmentFollowMode.generated.h"
 
+/**
+ * @note Uses 1 << 2 byte operations, ENUM_CLASS_FLAGS, can not be used for iteration
+ */
 UENUM(BlueprintType, meta = (Bitflags))
 enum class EOptimizedSkeletalMeshAttachmentFollowMode : uint8
 {

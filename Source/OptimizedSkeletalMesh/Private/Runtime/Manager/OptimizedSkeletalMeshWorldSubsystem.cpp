@@ -768,6 +768,9 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UnregisterInstance(FOptimizedSkeletal
 		return false;
 	}
 
+	RemoveAttachmentMapsForParent(InHandle.Id);
+	RemoveAttachmentMapsForChild(InHandle.Id);
+
 	Instances.Remove(InHandle.Id);
 	PreviousInstanceBonePalettes.Remove(InHandle.Id);
 	InstanceBonePalettes.Remove(InHandle.Id);
@@ -1728,6 +1731,114 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceById(
 	return GetInstance(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), OutDesc);
 }
 
+bool UOptimizedSkeletalMeshWorldSubsystem::AttachInstanceToInstance(
+	const FOptimizedSkeletalMeshInstanceHandle InChildHandle,
+	const FOptimizedSkeletalMeshInstanceHandle InParentHandle,
+	const FName InSocketName,
+	const FOptimizedSkeletalMeshInstanceAttachment& InAttachment,
+	const bool bInSnapNow)
+{
+	return AttachInstanceInternal(InChildHandle.Id, InParentHandle.Id, InSocketName, InAttachment, bInSnapNow);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::AttachInstanceToInstanceById(
+	const int32 InChildInstanceId,
+	const int32 InParentInstanceId,
+	const FName InSocketName,
+	const FOptimizedSkeletalMeshInstanceAttachment& InAttachment,
+	const bool bInSnapNow)
+{
+	return AttachInstanceInternal(InChildInstanceId, InParentInstanceId, InSocketName, InAttachment, bInSnapNow);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::DetachInstance(
+	const FOptimizedSkeletalMeshInstanceHandle InChildHandle)
+{
+	return DetachInstanceInternal(InChildHandle.Id);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::DetachInstanceById(
+	const int32 InChildInstanceId)
+{
+	return DetachInstanceInternal(InChildInstanceId);
+}
+
+int32 UOptimizedSkeletalMeshWorldSubsystem::DetachChildren(
+	const FOptimizedSkeletalMeshInstanceHandle InParentHandle)
+{
+	const int32 beforeCount = ChildAttachments.Num();
+	RemoveAttachmentMapsForParent(InParentHandle.Id);
+	return beforeCount - ChildAttachments.Num();
+}
+
+int32 UOptimizedSkeletalMeshWorldSubsystem::DetachChildrenById(
+	const int32 InParentInstanceId)
+{
+	return DetachChildren(FOptimizedSkeletalMeshInstanceHandle(InParentInstanceId));
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::IsInstanceAttached(
+	const FOptimizedSkeletalMeshInstanceHandle InChildHandle) const
+{
+	return ChildAttachments.Contains(InChildHandle.Id);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::IsInstanceAttachedById(const int32 InChildInstanceId) const
+{
+	return IsInstanceAttached(FOptimizedSkeletalMeshInstanceHandle(InChildInstanceId));
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceAttachment(
+	const FOptimizedSkeletalMeshInstanceHandle InChildHandle,
+	FOptimizedSkeletalMeshInstanceAttachment& OutAttachment) const
+{
+	const FOptimizedSkeletalMeshInstanceAttachment* attachment = ChildAttachments.Find(InChildHandle.Id);
+	if (!attachment)
+	{
+		return false;
+	}
+
+	OutAttachment = *attachment;
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceAttachmentById(
+	const int32 InChildInstanceId,
+	FOptimizedSkeletalMeshInstanceAttachment& OutAttachment) const
+{
+	return GetInstanceAttachment(FOptimizedSkeletalMeshInstanceHandle(InChildInstanceId), OutAttachment);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetAttachmentFollowRotation(
+	const FOptimizedSkeletalMeshInstanceHandle InChildHandle,
+	const bool bInFollowRotation)
+{
+	FOptimizedSkeletalMeshInstanceAttachment* attachment = ChildAttachments.Find(InChildHandle.Id);
+	if (!attachment)
+	{
+		return false;
+	}
+
+	const int32 rotationMask = static_cast<int32>(EOptimizedSkeletalMeshAttachmentFollowMode::Rotation);
+	if (bInFollowRotation)
+	{
+		attachment->FollowModeMask |= rotationMask;
+	}
+	else
+	{
+		attachment->FollowModeMask &= ~rotationMask;
+	}
+
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetAttachmentFollowRotationById(
+	const int32 InChildInstanceId,
+	const bool bInFollowRotation)
+{
+	return SetAttachmentFollowRotation(FOptimizedSkeletalMeshInstanceHandle(InChildInstanceId), bInFollowRotation);
+}
+
 bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransform(
 	const FOptimizedSkeletalMeshInstanceHandle InHandle,
 	const FName InSocketName,
@@ -1804,6 +1915,111 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransformById(
 	FTransform& OutWorldTransform) const
 {
 	return GetInstanceSocketTransform(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InSocketName, OutWorldTransform);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::AttachInstanceInternal(
+	const int32 InChildInstanceId,
+	const int32 InParentInstanceId,
+	const FName InSocketName,
+	const FOptimizedSkeletalMeshInstanceAttachment& InAttachment,
+	const bool bInSnapNow)
+{
+	if (!IsValidInstanceId(InChildInstanceId) || !IsValidInstanceId(InParentInstanceId))
+	{
+		return false;
+	}
+
+	if (InChildInstanceId == InParentInstanceId || InSocketName.IsNone())
+	{
+		return false;
+	}
+
+	if (WouldCreateAttachmentCycle(InChildInstanceId, InParentInstanceId))
+	{
+		return false;
+	}
+
+	if (!Instances.Contains(InChildInstanceId) || !Instances.Contains(InParentInstanceId))
+	{
+		return false;
+	}
+
+	RemoveAttachmentMapsForChild(InChildInstanceId);
+
+	FOptimizedSkeletalMeshInstanceAttachment attachment = InAttachment;
+	attachment.ParentHandle = FOptimizedSkeletalMeshInstanceHandle(InParentInstanceId);
+	attachment.ParentSocketName = InSocketName;
+	ChildAttachments.Add(InChildInstanceId, attachment);
+	ParentToChildren.Add(InParentInstanceId, InChildInstanceId);
+
+	if (bInSnapNow && attachment.bEnabled)
+	{
+		FTransform socketWorldTransform = FTransform::Identity;
+		if (GetInstanceSocketTransform(FOptimizedSkeletalMeshInstanceHandle(InParentInstanceId), InSocketName, socketWorldTransform))
+		{
+			const FTransform targetWorldTransform = attachment.RelativeOffset * socketWorldTransform;
+			UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle(InChildInstanceId), targetWorldTransform);
+		}
+	}
+
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::DetachInstanceInternal(const int32 InChildInstanceId)
+{
+	if (!ChildAttachments.Contains(InChildInstanceId))
+	{
+		return false;
+	}
+
+	RemoveAttachmentMapsForChild(InChildInstanceId);
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::WouldCreateAttachmentCycle(
+	const int32 InChildInstanceId,
+	const int32 InParentInstanceId) const
+{
+	int32 currentParent = InParentInstanceId;
+	while (currentParent != INDEX_NONE)
+	{
+		if (currentParent == InChildInstanceId)
+		{
+			return true;
+		}
+
+		const FOptimizedSkeletalMeshInstanceAttachment* parentAttachment = ChildAttachments.Find(currentParent);
+		if (!parentAttachment || !parentAttachment->ParentHandle.IsValid())
+		{
+			break;
+		}
+
+		currentParent = parentAttachment->ParentHandle.Id;
+	}
+
+	return false;
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::RemoveAttachmentMapsForChild(const int32 InChildInstanceId)
+{
+	FOptimizedSkeletalMeshInstanceAttachment existingAttachment;
+	if (!ChildAttachments.RemoveAndCopyValue(InChildInstanceId, existingAttachment))
+	{
+		return;
+	}
+
+	ParentToChildren.RemoveSingle(existingAttachment.ParentHandle.Id, InChildInstanceId);
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::RemoveAttachmentMapsForParent(const int32 InParentInstanceId)
+{
+	TArray<int32> childIds;
+	ParentToChildren.MultiFind(InParentInstanceId, childIds);
+	for (const int32 childId : childIds)
+	{
+		ChildAttachments.Remove(childId);
+	}
+	ParentToChildren.Remove(InParentInstanceId);
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationAsset(
