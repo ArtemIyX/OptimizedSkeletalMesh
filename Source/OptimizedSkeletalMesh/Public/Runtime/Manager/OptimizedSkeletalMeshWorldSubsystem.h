@@ -523,6 +523,7 @@ private:
 	TMap<int32, FOptimizedSkeletalMeshInstanceAttachment> ChildAttachments;
 	TMultiMap<int32, int32> ParentToChildren;
 	TMap<int32, FName> AttachmentMissingSocketWarnings;
+	mutable TMap<TObjectKey<USkeletalMesh>, TMap<FName, int32>> SocketBoneIndexCache;
 	TMap<int32, float> InstanceAnimationBlendAlphas;
 	TSet<int32> ActiveAnimationInstanceIds;
 	TSet<int32> DirtyAnimationInstanceIds;

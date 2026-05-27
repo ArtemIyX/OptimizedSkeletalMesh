@@ -609,6 +609,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	ExternalRenderComponents.Reset();
 	CustomDepthRenderComponents.Reset();
 	AttachmentMissingSocketWarnings.Reset();
+	SocketBoneIndexCache.Reset();
 	NextInstanceId = 1;
 	LastSeenRenderCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
 	RenderStateRecoveryAttempts = 0;
@@ -1866,28 +1867,38 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransform(
 	}
 
 	const FReferenceSkeleton& refSkeleton = instance->SkeletalMesh->GetRefSkeleton();
-	const int32 boneIndex = refSkeleton.FindBoneIndex(socket->BoneName);
+	const TObjectKey<USkeletalMesh> meshKey(instance->SkeletalMesh);
+	int32 boneIndex = INDEX_NONE;
+	bool bHasCachedBoneIndex = false;
+	if (const TMap<FName, int32>* socketMap = SocketBoneIndexCache.Find(meshKey))
+	{
+		if (const int32* cachedBoneIndex = socketMap->Find(InSocketName))
+		{
+			boneIndex = *cachedBoneIndex;
+			bHasCachedBoneIndex = true;
+		}
+	}
+
+	if (!bHasCachedBoneIndex)
+	{
+		boneIndex = refSkeleton.FindBoneIndex(socket->BoneName);
+		SocketBoneIndexCache.FindOrAdd(meshKey).Add(InSocketName, boneIndex);
+	}
+
 	if (boneIndex == INDEX_NONE || !bonePalette->IsValidIndex(boneIndex))
 	{
 		return false;
 	}
 
 	const TArray<FTransform>& refPose = refSkeleton.GetRefBonePose();
-	FTransform refComponentTransform = FTransform::Identity;
-	TArray<int32, TInlineAllocator<128>> boneChain;
-	for (int32 chainBoneIndex = boneIndex; chainBoneIndex != INDEX_NONE; chainBoneIndex = refSkeleton.GetParentIndex(chainBoneIndex))
+	FMatrix refComponentMatrix = FMatrix::Identity;
+	for (int32 refBoneIndex = boneIndex; refBoneIndex != INDEX_NONE; refBoneIndex = refSkeleton.GetParentIndex(refBoneIndex))
 	{
-		boneChain.Add(chainBoneIndex);
-	}
-
-	for (int32 chainIndex = boneChain.Num() - 1; chainIndex >= 0; --chainIndex)
-	{
-		const int32 refBoneIndex = boneChain[chainIndex];
 		if (!refPose.IsValidIndex(refBoneIndex))
 		{
 			return false;
 		}
-		refComponentTransform = refPose[refBoneIndex] * refComponentTransform;
+		refComponentMatrix = refPose[refBoneIndex].ToMatrixWithScale() * refComponentMatrix;
 	}
 
 	auto convertMatrix44fToMatrix = [](const FMatrix44f& InMatrix44f) -> FMatrix {
@@ -1902,7 +1913,6 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransform(
 		return outMatrix;
 	};
 
-	const FMatrix refComponentMatrix = refComponentTransform.ToMatrixWithScale();
 	const FMatrix skinningMatrix = convertMatrix44fToMatrix((*bonePalette)[boneIndex]);
 	const FMatrix boneAnimatedComponentMatrix = refComponentMatrix * skinningMatrix;
 	const FTransform boneAnimatedComponentTransform = FTransform(boneAnimatedComponentMatrix);
@@ -3063,13 +3073,10 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 		return;
 	}
 
-	TArray<int32> invalidChildren;
-	invalidChildren.Reserve(8);
-
-	for (const TPair<int32, FOptimizedSkeletalMeshInstanceAttachment>& pair : ChildAttachments)
+	for (auto it = ChildAttachments.CreateIterator(); it; ++it)
 	{
-		const int32 childInstanceId = pair.Key;
-		const FOptimizedSkeletalMeshInstanceAttachment& attachment = pair.Value;
+		const int32 childInstanceId = it.Key();
+		const FOptimizedSkeletalMeshInstanceAttachment& attachment = it.Value();
 		if (!attachment.bEnabled)
 		{
 			continue;
@@ -3078,7 +3085,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 		FOptimizedSkeletalMeshInstanceDesc* childDesc = Instances.Find(childInstanceId);
 		if (!childDesc)
 		{
-			invalidChildren.Add(childInstanceId);
+			ParentToChildren.RemoveSingle(attachment.ParentHandle.Id, childInstanceId);
+			AttachmentMissingSocketWarnings.Remove(childInstanceId);
+			it.RemoveCurrent();
 			continue;
 		}
 
@@ -3086,7 +3095,9 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 		const FOptimizedSkeletalMeshInstanceDesc* parentDesc = Instances.Find(parentInstanceId);
 		if (!parentDesc)
 		{
-			invalidChildren.Add(childInstanceId);
+			ParentToChildren.RemoveSingle(attachment.ParentHandle.Id, childInstanceId);
+			AttachmentMissingSocketWarnings.Remove(childInstanceId);
+			it.RemoveCurrent();
 			continue;
 		}
 
@@ -3136,11 +3147,6 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 		{
 			UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle(childInstanceId), targetWorldTransform);
 		}
-	}
-
-	for (const int32 childId : invalidChildren)
-	{
-		RemoveAttachmentMapsForChild(childId);
 	}
 }
 
