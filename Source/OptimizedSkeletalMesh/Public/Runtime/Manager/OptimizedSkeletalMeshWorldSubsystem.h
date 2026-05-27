@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -31,10 +31,9 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceHandle
 
 public:
 	FOptimizedSkeletalMeshInstanceHandle() = default;
+
 	explicit FOptimizedSkeletalMeshInstanceHandle(const int32 InId)
-		: Id(InId)
-	{
-	}
+		: Id(InId) {}
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Optimized Skeletal Mesh")
 	int32 Id = INDEX_NONE;
@@ -292,329 +291,293 @@ class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshWorldSubsystem : public UT
 	GENERATED_BODY()
 
 public:
-#pragma region Subsystem
+	#pragma region Subsystem
 	virtual void Initialize(FSubsystemCollectionBase& InCollection) override;
 	virtual void Deinitialize() override;
 	virtual void Tick(float InDeltaTime) override;
 	virtual TStatId GetStatId() const override;
 	virtual bool IsTickable() const override;
-#pragma endregion
+	#pragma endregion
 
-#pragma region InstanceLifecycle
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	FOptimizedSkeletalMeshInstanceHandle RegisterInstance(const FOptimizedSkeletalMeshInstanceDesc& InDesc);
+	#pragma region InstanceLifecycle
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Register Instance", Keywords = "instance register add remove update skeletal mesh"))
+	FOptimizedSkeletalMeshInstanceHandle RegisterInstance(UPARAM(DisplayName = "Desc") const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	bool UnregisterInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Unregister Instance", Keywords = "instance register add remove update skeletal mesh"))
+	bool UnregisterInstance(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	FOptimizedSkeletalMeshInstanceHandle AddInstance(const FOptimizedSkeletalMeshInstanceDesc& InDesc);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Add Instance", Keywords = "instance register add remove update skeletal mesh"))
+	FOptimizedSkeletalMeshInstanceHandle AddInstance(UPARAM(DisplayName = "Desc") const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	void AddInstancesBatch(
-		const FOptimizedSkeletalMeshInstanceDesc& InBaseDesc,
-		const TArray<FTransform>& InWorldTransforms,
-		TArray<FOptimizedSkeletalMeshInstanceHandle>& OutHandles);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Add Instances Batch", Keywords = "instance register add remove update skeletal mesh"))
+	void AddInstancesBatch(UPARAM(DisplayName = "Base Desc") const FOptimizedSkeletalMeshInstanceDesc& InBaseDesc,UPARAM(DisplayName = "World Transforms") const TArray<FTransform>& InWorldTransforms,UPARAM(DisplayName = "Handles") TArray<FOptimizedSkeletalMeshInstanceHandle>& OutHandles);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	bool RemoveInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Remove Instance", Keywords = "instance register add remove update skeletal mesh"))
+	bool RemoveInstance(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	bool RemoveInstanceById(int32 InInstanceId);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Remove Instance By Id", Keywords = "instance register add remove update skeletal mesh"))
+	bool RemoveInstanceById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	int32 RemoveInstances(const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Remove Instances", Keywords = "instance register add remove update skeletal mesh"))
+	int32 RemoveInstances(UPARAM(DisplayName = "Handles") const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	int32 RemoveInstancesById(const TArray<int32>& InInstanceIds);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Remove Instances By Id", Keywords = "instance register add remove update skeletal mesh"))
+	int32 RemoveInstancesById(UPARAM(DisplayName = "Instance Ids") const TArray<int32>& InInstanceIds);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	bool UpdateInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, const FOptimizedSkeletalMeshInstanceDesc& InDesc);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Update Instance", Keywords = "instance register add remove update skeletal mesh"))
+	bool UpdateInstance(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Desc") const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	bool SetInstanceSkeletalMesh(
-		FOptimizedSkeletalMeshInstanceHandle InHandle,
-		USkeletalMesh* InSkeletalMesh,
-		bool bInMaintainAnim = true,
-		bool bInMaintainRenderParams = true);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Set Instance Skeletal Mesh", Keywords = "instance register add remove update skeletal mesh"))
+	bool SetInstanceSkeletalMesh(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Skeletal Mesh") USkeletalMesh* InSkeletalMesh,UPARAM(DisplayName = "Maintain Anim") bool bInMaintainAnim = true,UPARAM(DisplayName = "Maintain Render Params") bool bInMaintainRenderParams = true);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle")
-	bool SetInstanceSkeletalMeshById(
-		int32 InInstanceId,
-		USkeletalMesh* InSkeletalMesh,
-		bool bInMaintainAnim = true,
-		bool bInMaintainRenderParams = true);
-#pragma endregion
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Lifecycle", meta = (DisplayName = "Set Instance Skeletal Mesh By Id", Keywords = "instance register add remove update skeletal mesh"))
+	bool SetInstanceSkeletalMeshById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Skeletal Mesh") USkeletalMesh* InSkeletalMesh,UPARAM(DisplayName = "Maintain Anim") bool bInMaintainAnim = true,UPARAM(DisplayName = "Maintain Render Params") bool bInMaintainRenderParams = true);
+	#pragma endregion
 
-#pragma region InstanceTransform
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	bool UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle InHandle, const FTransform& InWorldTransform);
+	#pragma region InstanceTransform
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Update Instance Transform", Keywords = "instance transform location rotation scale move"))
+	bool UpdateInstanceTransform(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "World Transform") const FTransform& InWorldTransform);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	bool UpdateInstanceTransformById(int32 InInstanceId, const FTransform& InWorldTransform);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Update Instance Transform By Id", Keywords = "instance transform location rotation scale move"))
+	bool UpdateInstanceTransformById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "World Transform") const FTransform& InWorldTransform);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	int32 UpdateInstancesTransform(
-		const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles,
-		const TArray<FTransform>& InWorldTransforms);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Update Instances Transform", Keywords = "instance transform location rotation scale move"))
+	int32 UpdateInstancesTransform(UPARAM(DisplayName = "Handles") const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles,UPARAM(DisplayName = "World Transforms") const TArray<FTransform>& InWorldTransforms);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	int32 UpdateInstancesTransformById(const TArray<int32>& InInstanceIds, const TArray<FTransform>& InWorldTransforms);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Update Instances Transform By Id", Keywords = "instance transform location rotation scale move"))
+	int32 UpdateInstancesTransformById(UPARAM(DisplayName = "Instance Ids") const TArray<int32>& InInstanceIds,UPARAM(DisplayName = "World Transforms") const TArray<FTransform>& InWorldTransforms);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	bool SetInstanceLocation(FOptimizedSkeletalMeshInstanceHandle InHandle, const FVector& InWorldLocation);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Set Instance Location", Keywords = "instance transform location rotation scale move"))
+	bool SetInstanceLocation(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "World Location") const FVector& InWorldLocation);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	bool SetInstanceLocationById(int32 InInstanceId, const FVector& InWorldLocation);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Set Instance Location By Id", Keywords = "instance transform location rotation scale move"))
+	bool SetInstanceLocationById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "World Location") const FVector& InWorldLocation);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	bool SetInstanceRotation(FOptimizedSkeletalMeshInstanceHandle InHandle, const FRotator& InWorldRotation);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Set Instance Rotation", Keywords = "instance transform location rotation scale move"))
+	bool SetInstanceRotation(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "World Rotation") const FRotator& InWorldRotation);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	bool SetInstanceRotationById(int32 InInstanceId, const FRotator& InWorldRotation);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Set Instance Rotation By Id", Keywords = "instance transform location rotation scale move"))
+	bool SetInstanceRotationById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "World Rotation") const FRotator& InWorldRotation);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	bool SetInstanceScale(FOptimizedSkeletalMeshInstanceHandle InHandle, const FVector& InWorldScale3D);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Set Instance Scale", Keywords = "instance transform location rotation scale move"))
+	bool SetInstanceScale(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "World Scale3 D") const FVector& InWorldScale3D);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform")
-	bool SetInstanceScaleById(int32 InInstanceId, const FVector& InWorldScale3D);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Set Instance Scale By Id", Keywords = "instance transform location rotation scale move"))
+	bool SetInstanceScaleById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "World Scale3 D") const FVector& InWorldScale3D);
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Get Instance Transform", Keywords = "instance transform location rotation scale move"))
 	bool GetInstanceTransform(FOptimizedSkeletalMeshInstanceHandle InHandle, FTransform& OutWorldTransform) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Get Instance Transform By Id", Keywords = "instance transform location rotation scale move"))
 	bool GetInstanceTransformById(int32 InInstanceId, FTransform& OutWorldTransform) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Get Instance Location", Keywords = "instance transform location rotation scale move"))
 	bool GetInstanceLocation(FOptimizedSkeletalMeshInstanceHandle InHandle, FVector& OutWorldLocation) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Get Instance Location By Id", Keywords = "instance transform location rotation scale move"))
 	bool GetInstanceLocationById(int32 InInstanceId, FVector& OutWorldLocation) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Get Instance Rotation", Keywords = "instance transform location rotation scale move"))
 	bool GetInstanceRotation(FOptimizedSkeletalMeshInstanceHandle InHandle, FRotator& OutWorldRotation) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Get Instance Rotation By Id", Keywords = "instance transform location rotation scale move"))
 	bool GetInstanceRotationById(int32 InInstanceId, FRotator& OutWorldRotation) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Get Instance Scale", Keywords = "instance transform location rotation scale move"))
 	bool GetInstanceScale(FOptimizedSkeletalMeshInstanceHandle InHandle, FVector& OutWorldScale3D) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Transform", meta = (DisplayName = "Get Instance Scale By Id", Keywords = "instance transform location rotation scale move"))
 	bool GetInstanceScaleById(int32 InInstanceId, FVector& OutWorldScale3D) const;
-#pragma endregion
+	#pragma endregion
 
-#pragma region InstanceVisibility
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility")
-	bool UpdateInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationTime);
+	#pragma region InstanceVisibility
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility", meta = (DisplayName = "Update Instance Animation Time", Keywords = "instance visibility show hide animation playback"))
+	bool UpdateInstanceAnimationTime(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Animation Time") float InAnimationTime);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility")
-	bool SetInstanceAnimationPlaying(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInPlaying);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility", meta = (DisplayName = "Set Instance Animation Playing", Keywords = "instance visibility show hide animation playback"))
+	bool SetInstanceAnimationPlaying(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Playing") bool bInPlaying);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility")
-	bool SetInstanceAnimationUpdateRateHz(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationUpdateRateHz);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility", meta = (DisplayName = "Set Instance Animation Update Rate Hz", Keywords = "instance visibility show hide animation playback"))
+	bool SetInstanceAnimationUpdateRateHz(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Animation Update Rate Hz") float InAnimationUpdateRateHz);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility")
-	bool SetInstanceVisible(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInVisible);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility", meta = (DisplayName = "Set Instance Visible", Keywords = "instance visibility show hide animation playback"))
+	bool SetInstanceVisible(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Visible") bool bInVisible);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility")
-	bool ShowInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility", meta = (DisplayName = "Show Instance", Keywords = "instance visibility show hide animation playback"))
+	bool ShowInstance(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility")
-	bool HideInstance(FOptimizedSkeletalMeshInstanceHandle InHandle);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility", meta = (DisplayName = "Hide Instance", Keywords = "instance visibility show hide animation playback"))
+	bool HideInstance(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility")
-	int32 SetInstancesVisible(const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles, bool bInVisible);
-#pragma endregion
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Visibility", meta = (DisplayName = "Set Instances Visible", Keywords = "instance visibility show hide animation playback"))
+	int32 SetInstancesVisible(UPARAM(DisplayName = "Handles") const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles,UPARAM(DisplayName = "Visible") bool bInVisible);
+	#pragma endregion
 
-#pragma region InstanceRendering
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceCustomDepth(
-		FOptimizedSkeletalMeshInstanceHandle InHandle,
-		bool bInRenderCustomDepth,
-		int32 InCustomDepthStencilValue = 0);
+	#pragma region InstanceRendering
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Custom Depth", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceCustomDepth(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Render Custom Depth") bool bInRenderCustomDepth,UPARAM(DisplayName = "Custom Depth Stencil Value") int32 InCustomDepthStencilValue = 0);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceCustomDepthById(
-		int32 InInstanceId,
-		bool bInRenderCustomDepth,
-		int32 InCustomDepthStencilValue = 0);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Custom Depth By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceCustomDepthById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Render Custom Depth") bool bInRenderCustomDepth,UPARAM(DisplayName = "Custom Depth Stencil Value") int32 InCustomDepthStencilValue = 0);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceRenderCustomDepth(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInRenderCustomDepth);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Render Custom Depth", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceRenderCustomDepth(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Render Custom Depth") bool bInRenderCustomDepth);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceRenderCustomDepthById(int32 InInstanceId, bool bInRenderCustomDepth);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Render Custom Depth By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceRenderCustomDepthById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Render Custom Depth") bool bInRenderCustomDepth);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceCustomDepthStencilValue(
-		FOptimizedSkeletalMeshInstanceHandle InHandle,
-		int32 InCustomDepthStencilValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Custom Depth Stencil Value", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceCustomDepthStencilValue(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Custom Depth Stencil Value") int32 InCustomDepthStencilValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceCustomDepthStencilValueById(int32 InInstanceId, int32 InCustomDepthStencilValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Custom Depth Stencil Value By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceCustomDepthStencilValueById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Custom Depth Stencil Value") int32 InCustomDepthStencilValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterial(FOptimizedSkeletalMeshInstanceHandle InHandle, UMaterialInterface* InMaterial);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterial(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Material") UMaterialInterface* InMaterial);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialById(int32 InInstanceId, UMaterialInterface* InMaterial);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Material") UMaterialInterface* InMaterial);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialScalarParam(FOptimizedSkeletalMeshInstanceHandle InHandle, int32 InParamIndex, float InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Scalar Param", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialScalarParam(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Param Index") int32 InParamIndex,UPARAM(DisplayName = "Value") float InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialScalarParamById(int32 InInstanceId, int32 InParamIndex, float InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Scalar Param By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialScalarParamById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Param Index") int32 InParamIndex,UPARAM(DisplayName = "Value") float InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialVectorParam(FOptimizedSkeletalMeshInstanceHandle InHandle, int32 InStartParamIndex, const FVector& InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Vector Param", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialVectorParam(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Start Param Index") int32 InStartParamIndex,UPARAM(DisplayName = "Value") const FVector& InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialVectorParamById(int32 InInstanceId, int32 InStartParamIndex, const FVector& InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Vector Param By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialVectorParamById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Start Param Index") int32 InStartParamIndex,UPARAM(DisplayName = "Value") const FVector& InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialBoolParam(FOptimizedSkeletalMeshInstanceHandle InHandle, int32 InParamIndex, bool bInValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Bool Param", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialBoolParam(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Param Index") int32 InParamIndex,UPARAM(DisplayName = "Value") bool bInValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialBoolParamById(int32 InInstanceId, int32 InParamIndex, bool bInValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Bool Param By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialBoolParamById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Param Index") int32 InParamIndex,UPARAM(DisplayName = "Value") bool bInValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialTextureParam(
-		FOptimizedSkeletalMeshInstanceHandle InHandle,
-		FName InParameterName,
-		UTexture2D* InTexture);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Texture Param", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialTextureParam(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Texture") UTexture2D* InTexture);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialTextureParamById(int32 InInstanceId, FName InParameterName, UTexture2D* InTexture);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Texture Param By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialTextureParamById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Texture") UTexture2D* InTexture);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialScalarParamByName(FOptimizedSkeletalMeshInstanceHandle InHandle, FName InParameterName, float InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Scalar Param By Name", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialScalarParamByName(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Value") float InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialScalarParamByNameId(int32 InInstanceId, FName InParameterName, float InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Scalar Param By Name Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialScalarParamByNameId(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Value") float InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialVectorParamByName(
-		FOptimizedSkeletalMeshInstanceHandle InHandle,
-		FName InParameterName,
-		const FVector& InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Vector Param By Name", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialVectorParamByName(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Value") const FVector& InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialVectorParamByNameId(int32 InInstanceId, FName InParameterName, const FVector& InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Vector Param By Name Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialVectorParamByNameId(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Value") const FVector& InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialBoolParamByName(FOptimizedSkeletalMeshInstanceHandle InHandle, FName InParameterName, bool bInValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Bool Param By Name", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialBoolParamByName(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Value") bool bInValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialBoolParamByNameId(int32 InInstanceId, FName InParameterName, bool bInValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Bool Param By Name Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialBoolParamByNameId(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Value") bool bInValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialColorParam(
-		FOptimizedSkeletalMeshInstanceHandle InHandle,
-		int32 InStartParamIndex,
-		const FLinearColor& InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Color Param", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialColorParam(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Start Param Index") int32 InStartParamIndex,UPARAM(DisplayName = "Value") const FLinearColor& InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialColorParamById(int32 InInstanceId, int32 InStartParamIndex, const FLinearColor& InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Color Param By Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialColorParamById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Start Param Index") int32 InStartParamIndex,UPARAM(DisplayName = "Value") const FLinearColor& InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialColorParamByName(
-		FOptimizedSkeletalMeshInstanceHandle InHandle,
-		FName InParameterName,
-		const FLinearColor& InValue);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Color Param By Name", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialColorParamByName(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Value") const FLinearColor& InValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering")
-	bool SetInstanceMaterialColorParamByNameId(int32 InInstanceId, FName InParameterName, const FLinearColor& InValue);
-#pragma endregion
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Rendering", meta = (DisplayName = "Set Instance Material Color Param By Name Id", Keywords = "instance rendering material custom depth stencil parameter color texture"))
+	bool SetInstanceMaterialColorParamByNameId(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Parameter Name") FName InParameterName,UPARAM(DisplayName = "Value") const FLinearColor& InValue);
+	#pragma endregion
 
-#pragma region InstanceQuery
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Query")
+	#pragma region InstanceQuery
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Query", meta = (DisplayName = "Get Instance", Keywords = "instance query get state snapshot"))
 	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Query")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Query", meta = (DisplayName = "Get Instance By Id", Keywords = "instance query get state snapshot"))
 	bool GetInstanceById(int32 InInstanceId, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
-#pragma endregion
+	#pragma endregion
 
-#pragma region InstanceAnimation
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool SetInstanceAnimationAsset(
-		FOptimizedSkeletalMeshInstanceHandle InHandle,
-		UAnimSequence* InAnimation,
-		bool bInResetTime = true);
+	#pragma region InstanceAnimation
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Asset", Keywords = "instance animation play pause stop loop rate time"))
+	bool SetInstanceAnimationAsset(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Animation") UAnimSequence* InAnimation,UPARAM(DisplayName = "Reset Time") bool bInResetTime = true);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool SetInstanceAnimationAssetById(int32 InInstanceId, UAnimSequence* InAnimation, bool bInResetTime = true);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Asset By Id", Keywords = "instance animation play pause stop loop rate time"))
+	bool SetInstanceAnimationAssetById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Animation") UAnimSequence* InAnimation,UPARAM(DisplayName = "Reset Time") bool bInResetTime = true);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool PlayInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle InHandle);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Play Instance Animation", Keywords = "instance animation play pause stop loop rate time"))
+	bool PlayInstanceAnimation(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool PlayInstanceAnimationById(int32 InInstanceId);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Play Instance Animation By Id", Keywords = "instance animation play pause stop loop rate time"))
+	bool PlayInstanceAnimationById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool PauseInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle InHandle);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Pause Instance Animation", Keywords = "instance animation play pause stop loop rate time"))
+	bool PauseInstanceAnimation(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool PauseInstanceAnimationById(int32 InInstanceId);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Pause Instance Animation By Id", Keywords = "instance animation play pause stop loop rate time"))
+	bool PauseInstanceAnimationById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool StopInstanceAnimation(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInResetTime = true);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Stop Instance Animation", Keywords = "instance animation play pause stop loop rate time"))
+	bool StopInstanceAnimation(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Reset Time") bool bInResetTime = true);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool StopInstanceAnimationById(int32 InInstanceId, bool bInResetTime = true);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Stop Instance Animation By Id", Keywords = "instance animation play pause stop loop rate time"))
+	bool StopInstanceAnimationById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Reset Time") bool bInResetTime = true);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool SetInstanceAnimationLooping(FOptimizedSkeletalMeshInstanceHandle InHandle, bool bInLoopAnimation);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Looping", Keywords = "instance animation play pause stop loop rate time"))
+	bool SetInstanceAnimationLooping(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Loop Animation") bool bInLoopAnimation);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool SetInstanceAnimationLoopingById(int32 InInstanceId, bool bInLoopAnimation);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Looping By Id", Keywords = "instance animation play pause stop loop rate time"))
+	bool SetInstanceAnimationLoopingById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Loop Animation") bool bInLoopAnimation);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool SetInstanceAnimationPlayRate(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationPlayRate);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Play Rate", Keywords = "instance animation play pause stop loop rate time"))
+	bool SetInstanceAnimationPlayRate(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Animation Play Rate") float InAnimationPlayRate);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool SetInstanceAnimationPlayRateById(int32 InInstanceId, float InAnimationPlayRate);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Play Rate By Id", Keywords = "instance animation play pause stop loop rate time"))
+	bool SetInstanceAnimationPlayRateById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Animation Play Rate") float InAnimationPlayRate);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool SetInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationTime);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Time", Keywords = "instance animation play pause stop loop rate time"))
+	bool SetInstanceAnimationTime(UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,UPARAM(DisplayName = "Animation Time") float InAnimationTime);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation")
-	bool SetInstanceAnimationTimeById(int32 InInstanceId, float InAnimationTime);
-#pragma endregion
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Time By Id", Keywords = "instance animation play pause stop loop rate time"))
+	bool SetInstanceAnimationTimeById(UPARAM(DisplayName = "Instance Id") int32 InInstanceId,UPARAM(DisplayName = "Animation Time") float InAnimationTime);
+	#pragma endregion
 
-#pragma region StatsAndSettings
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings")
+	#pragma region StatsAndSettings
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Get Instances Snapshot", Keywords = "stats settings render debug"))
 	void GetInstancesSnapshot(TArray<FOptimizedSkeletalMeshInstanceSnapshot>& OutInstances) const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Get Instance Count", Keywords = "stats settings render debug"))
 	int32 GetInstanceCount() const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Get Visible Render Batch Count", Keywords = "stats settings render debug"))
 	int32 GetVisibleRenderBatchCount() const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Get Last Animation Stats", Keywords = "stats settings render debug"))
 	FOptimizedSkeletalMeshAnimationStats GetLastAnimationStats() const;
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Get Last Render Stats", Keywords = "stats settings render debug"))
 	FOptimizedSkeletalMeshRenderStats GetLastRenderStats() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Stats and Settings")
-	void ApplyRenderSettings(const FOptimizedSkeletalMeshRenderSettings& InSettings);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Apply Render Settings", Keywords = "stats settings render debug"))
+	void ApplyRenderSettings(UPARAM(DisplayName = "Settings") const FOptimizedSkeletalMeshRenderSettings& InSettings);
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Get Render Settings", Keywords = "stats settings render debug"))
 	FOptimizedSkeletalMeshRenderSettings GetRenderSettings() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Stats and Settings")
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Reload Render Settings From CVars", Keywords = "stats settings render debug"))
 	void ReloadRenderSettingsFromCVars();
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Stats and Settings")
-	void RegisterExternalRenderComponent(UOptimizedSkeletalMeshRenderComponent* InComponent);
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Register External Render Component", Keywords = "stats settings render debug"))
+	void RegisterExternalRenderComponent(UPARAM(DisplayName = "Component") UOptimizedSkeletalMeshRenderComponent* InComponent);
 
-	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Stats and Settings")
-	void UnregisterExternalRenderComponent(UOptimizedSkeletalMeshRenderComponent* InComponent);
-#pragma endregion
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Stats and Settings", meta = (DisplayName = "Unregister External Render Component", Keywords = "stats settings render debug"))
+	void UnregisterExternalRenderComponent(UPARAM(DisplayName = "Component") UOptimizedSkeletalMeshRenderComponent* InComponent);
+	#pragma endregion
 
-#pragma region RenderBridge
+	#pragma region RenderBridge
 	void ApplyRenderSettingsToComponent(UOptimizedSkeletalMeshRenderComponent* InComponent) const;
 
 	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle InHandle) const;
@@ -623,7 +586,7 @@ public:
 	void UpdateRenderVisibleInstanceIds(TConstArrayView<int32> InVisibleInstanceIds);
 	void UpdateLastRenderStats(const FOptimizedSkeletalMeshRenderStats& InStats);
 
-	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Render Bridge")
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Render Bridge", meta = (DisplayName = "Get Cached Bone Palette Count", Keywords = "render bridge bone palette cache"))
 	int32 GetCachedBonePaletteCount() const;
 
 	bool HasDirtyBonePalettes() const
@@ -648,10 +611,10 @@ public:
 		bRenderDataDirty = false;
 		bCustomDepthRenderDataDirty = false;
 	}
-#pragma endregion
+	#pragma endregion
 
 private:
-#pragma region Rendering
+	#pragma region Rendering
 	void EnsureRenderBridge();
 	void DestroyRenderBridge();
 	void ApplyRenderSettingsToComponent();
@@ -661,9 +624,9 @@ private:
 	void RequestCustomDepthRenderRefresh();
 	bool PushBonePalettesToRenderComponents();
 	bool PushInstanceTransformsToRenderComponents();
-#pragma endregion
+	#pragma endregion
 
-#pragma region Instances
+	#pragma region Instances
 	int32 AllocateInstanceId();
 	bool IsValidInstanceId(int32 InInstanceId) const;
 	void MarkRenderDataDirty();
@@ -681,9 +644,9 @@ private:
 	static float GetUpdateRateScaleForDistance(float InDistance);
 	bool GetNearestCameraDistance(const FVector& InWorldLocation, float& OutDistance) const;
 	static bool ShouldTickAnimation(const FOptimizedSkeletalMeshInstanceDesc& InDesc);
-#pragma endregion
+	#pragma endregion
 
-#pragma region Animation
+	#pragma region Animation
 	void TickAnimation(float InDeltaTime);
 	void InitializeAnimationStats(FOptimizedSkeletalMeshAnimationStats& OutStats, float InDeltaTime) const;
 	void FinalizeAnimationStats(FOptimizedSkeletalMeshAnimationStats& OutStats) const;
@@ -714,13 +677,13 @@ private:
 		const FOptimizedSkeletalMeshAnimationMeshCache& InMeshCache,
 		TArray<FMatrix44f>& OutBonePalette);
 	static float WrapAnimationTime(float InAnimationTime, float InSequenceLength);
-#pragma endregion
+	#pragma endregion
 
-#pragma region Debug
+	#pragma region Debug
 	void DrawInstanceDebugOverlay() const;
-#pragma endregion
+	#pragma endregion
 
-#pragma region State
+	#pragma region State
 	UPROPERTY(Transient)
 	TMap<int32, FOptimizedSkeletalMeshInstanceDesc> Instances;
 
@@ -769,5 +732,5 @@ private:
 	FOptimizedSkeletalMeshRenderSettings CurrentRenderSettings;
 	FOptimizedSkeletalMeshRenderSettings ActiveRenderSettings;
 	TArray<TWeakObjectPtr<UOptimizedSkeletalMeshRenderComponent>> ExternalRenderComponents;
-#pragma endregion
+	#pragma endregion
 };
