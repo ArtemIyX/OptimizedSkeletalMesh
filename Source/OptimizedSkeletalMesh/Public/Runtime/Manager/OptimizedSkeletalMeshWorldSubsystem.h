@@ -329,6 +329,20 @@ public:
 	bool UpdateInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceSkeletalMesh(
+		FOptimizedSkeletalMeshInstanceHandle InHandle,
+		USkeletalMesh* InSkeletalMesh,
+		bool bInMaintainAnim = true,
+		bool bInMaintainRenderParams = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
+	bool SetInstanceSkeletalMeshById(
+		int32 InInstanceId,
+		USkeletalMesh* InSkeletalMesh,
+		bool bInMaintainAnim = true,
+		bool bInMaintainRenderParams = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle InHandle, const FTransform& InWorldTransform);
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")

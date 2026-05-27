@@ -887,6 +887,79 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UpdateInstance(
 	return true;
 }
 
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceSkeletalMesh(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	USkeletalMesh* InSkeletalMesh,
+	const bool bInMaintainAnim,
+	const bool bInMaintainRenderParams)
+{
+	if (!InSkeletalMesh)
+	{
+		return false;
+	}
+
+	FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance)
+	{
+		return false;
+	}
+
+	if (instance->SkeletalMesh == InSkeletalMesh)
+	{
+		return true;
+	}
+
+	if (bInMaintainAnim && instance->Animation)
+	{
+		const USkeleton* newMeshSkeleton = InSkeletalMesh->GetSkeleton();
+		const USkeleton* animationSkeleton = instance->Animation->GetSkeleton();
+		if (!newMeshSkeleton || !animationSkeleton || newMeshSkeleton != animationSkeleton)
+		{
+			return false;
+		}
+	}
+
+	instance->SkeletalMesh = InSkeletalMesh;
+
+	if (!bInMaintainAnim)
+	{
+		instance->Animation = nullptr;
+		instance->AnimationTime = 0.0f;
+		instance->AnimationPlayRate = 1.0f;
+		instance->bLoopAnimation = true;
+		instance->bPlayAnimation = false;
+		instance->AnimationUpdateRateHz = 0.0f;
+	}
+
+	if (!bInMaintainRenderParams)
+	{
+		instance->bCastLocalLightShadows = true;
+		instance->bRenderCustomDepth = false;
+		instance->CustomDepthStencilValue = 0;
+		instance->MaterialOverride = nullptr;
+		instance->MaterialCustomData0 = FVector4f::Zero();
+		instance->MaterialCustomData1 = FVector4f::Zero();
+	}
+
+	RefreshAnimationTracking(InHandle.Id, *instance, true);
+	MarkBonePaletteDirty(InHandle.Id);
+	MarkRenderDataDirty();
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceSkeletalMeshById(
+	const int32 InInstanceId,
+	USkeletalMesh* InSkeletalMesh,
+	const bool bInMaintainAnim,
+	const bool bInMaintainRenderParams)
+{
+	return SetInstanceSkeletalMesh(
+		FOptimizedSkeletalMeshInstanceHandle(InInstanceId),
+		InSkeletalMesh,
+		bInMaintainAnim,
+		bInMaintainRenderParams);
+}
+
 bool UOptimizedSkeletalMeshWorldSubsystem::UpdateInstanceTransform(
 	FOptimizedSkeletalMeshInstanceHandle InHandle,
 	const FTransform& InWorldTransform)
