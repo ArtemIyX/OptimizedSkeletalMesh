@@ -292,12 +292,15 @@ class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshWorldSubsystem : public UT
 	GENERATED_BODY()
 
 public:
+#pragma region Subsystem
 	virtual void Initialize(FSubsystemCollectionBase& InCollection) override;
 	virtual void Deinitialize() override;
 	virtual void Tick(float InDeltaTime) override;
 	virtual TStatId GetStatId() const override;
 	virtual bool IsTickable() const override;
+#pragma endregion
 
+#pragma region InstanceLifecycle
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	FOptimizedSkeletalMeshInstanceHandle RegisterInstance(const FOptimizedSkeletalMeshInstanceDesc& InDesc);
 
@@ -341,7 +344,9 @@ public:
 		USkeletalMesh* InSkeletalMesh,
 		bool bInMaintainAnim = true,
 		bool bInMaintainRenderParams = true);
+#pragma endregion
 
+#pragma region InstanceTransform
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle InHandle, const FTransform& InWorldTransform);
 
@@ -397,7 +402,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	bool GetInstanceScaleById(int32 InInstanceId, FVector& OutWorldScale3D) const;
+#pragma endregion
 
+#pragma region InstanceVisibility
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	bool UpdateInstanceAnimationTime(FOptimizedSkeletalMeshInstanceHandle InHandle, float InAnimationTime);
 
@@ -418,7 +425,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh")
 	int32 SetInstancesVisible(const TArray<FOptimizedSkeletalMeshInstanceHandle>& InHandles, bool bInVisible);
+#pragma endregion
 
+#pragma region InstanceRendering
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
 	bool SetInstanceCustomDepth(
 		FOptimizedSkeletalMeshInstanceHandle InHandle,
@@ -516,13 +525,17 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
 	bool SetInstanceMaterialColorParamByNameId(int32 InInstanceId, FName InParameterName, const FLinearColor& InValue);
+#pragma endregion
 
+#pragma region InstanceQuery
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	bool GetInstance(FOptimizedSkeletalMeshInstanceHandle InHandle, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	bool GetInstanceById(int32 InInstanceId, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
+#pragma endregion
 
+#pragma region InstanceAnimation
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
 	bool SetInstanceAnimationAsset(
 		FOptimizedSkeletalMeshInstanceHandle InHandle,
@@ -567,7 +580,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Animation")
 	bool SetInstanceAnimationTimeById(int32 InInstanceId, float InAnimationTime);
+#pragma endregion
 
+#pragma region StatsAndSettings
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh")
 	void GetInstancesSnapshot(TArray<FOptimizedSkeletalMeshInstanceSnapshot>& OutInstances) const;
 
@@ -597,7 +612,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Rendering")
 	void UnregisterExternalRenderComponent(UOptimizedSkeletalMeshRenderComponent* InComponent);
+#pragma endregion
 
+#pragma region RenderBridge
 	void ApplyRenderSettingsToComponent(UOptimizedSkeletalMeshRenderComponent* InComponent) const;
 
 	const TArray<FMatrix44f>* GetInstanceBonePalette(FOptimizedSkeletalMeshInstanceHandle InHandle) const;
@@ -631,6 +648,7 @@ public:
 		bRenderDataDirty = false;
 		bCustomDepthRenderDataDirty = false;
 	}
+#pragma endregion
 
 private:
 #pragma region Rendering
