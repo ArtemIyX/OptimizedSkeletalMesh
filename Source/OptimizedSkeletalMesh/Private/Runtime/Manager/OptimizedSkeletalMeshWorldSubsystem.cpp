@@ -20,6 +20,7 @@
 #include "GameFramework/Actor.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "OptimizedSkeletalMeshLog.h"
 #include "Rendering/SkeletalMeshRenderData.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderBridgeActor.h"
 #include "Runtime/Rendering/OptimizedSkeletalMeshRenderComponent.h"
@@ -752,6 +753,7 @@ FOptimizedSkeletalMeshInstanceHandle UOptimizedSkeletalMeshWorldSubsystem::Regis
 {
 	if (!InDesc.SkeletalMesh)
 	{
+		UE_LOG(LogOSMSubsystem, Verbose, TEXT("RegisterInstance rejected: SkeletalMesh is null"));
 		return FOptimizedSkeletalMeshInstanceHandle();
 	}
 
@@ -761,6 +763,7 @@ FOptimizedSkeletalMeshInstanceHandle UOptimizedSkeletalMeshWorldSubsystem::Regis
 	Instances.Add(instanceId, InDesc);
 	RefreshAnimationTracking(instanceId, InDesc, true);
 	MarkRenderDataDirty();
+	UE_LOG(LogOSMSubsystem, VeryVerbose, TEXT("Registered instance %d"), instanceId);
 
 	return FOptimizedSkeletalMeshInstanceHandle(instanceId);
 }
@@ -769,6 +772,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UnregisterInstance(FOptimizedSkeletal
 {
 	if (!IsValidInstanceId(InHandle.Id))
 	{
+		UE_LOG(LogOSMSubsystem, Verbose, TEXT("UnregisterInstance rejected: invalid id %d"), InHandle.Id);
 		return false;
 	}
 
@@ -783,6 +787,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::UnregisterInstance(FOptimizedSkeletal
 	MarkBonePaletteDirty(InHandle.Id);
 	FreeInstanceIds.Add(InHandle.Id);
 	MarkRenderDataDirty();
+	UE_LOG(LogOSMSubsystem, VeryVerbose, TEXT("Unregistered instance %d"), InHandle.Id);
 
 	return true;
 }
@@ -1304,6 +1309,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceCustomDepth(
 	instance->CustomDepthStencilValue = stencilValue;
 	MarkBonePaletteDirty(InHandle.Id);
 	MarkCustomDepthRenderDataDirty();
+	UE_LOG(LogOSMCustomDepth, VeryVerbose, TEXT("Set custom depth: id=%d enabled=%d stencil=%d"), InHandle.Id, bInRenderCustomDepth ? 1 : 0, stencilValue);
 	return true;
 }
 
@@ -1377,6 +1383,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceMaterial(
 
 	instance->MaterialOverride = InMaterial;
 	MarkRenderDataDirty();
+	UE_LOG(LogOSMMaterial, Verbose, TEXT("Set material override: id=%d material=%s"), InHandle.Id, InMaterial ? *InMaterial->GetName() : TEXT("None"));
 	return true;
 }
 
@@ -1851,12 +1858,14 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransform(
 	const FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
 	if (!instance || !instance->SkeletalMesh || InSocketName.IsNone())
 	{
+		UE_LOG(LogOSMAttachment, VeryVerbose, TEXT("GetInstanceSocketTransform failed: invalid input (id=%d, socket=%s)"), InHandle.Id, *InSocketName.ToString());
 		return false;
 	}
 
 	const USkeletalMeshSocket* socket = instance->SkeletalMesh->FindSocket(InSocketName);
 	if (!socket)
 	{
+		UE_LOG(LogOSMAttachment, VeryVerbose, TEXT("Socket '%s' not found for instance %d"), *InSocketName.ToString(), InHandle.Id);
 		return false;
 	}
 
@@ -1939,21 +1948,25 @@ bool UOptimizedSkeletalMeshWorldSubsystem::AttachInstanceInternal(
 {
 	if (!IsValidInstanceId(InChildInstanceId) || !IsValidInstanceId(InParentInstanceId))
 	{
+		UE_LOG(LogOSMAttachment, Verbose, TEXT("Attach failed: invalid child/parent id (%d -> %d)"), InChildInstanceId, InParentInstanceId);
 		return false;
 	}
 
 	if (InChildInstanceId == InParentInstanceId || InSocketName.IsNone())
 	{
+		UE_LOG(LogOSMAttachment, Verbose, TEXT("Attach failed: self-attach or none socket (%d, socket=%s)"), InChildInstanceId, *InSocketName.ToString());
 		return false;
 	}
 
 	if (WouldCreateAttachmentCycle(InChildInstanceId, InParentInstanceId))
 	{
+		UE_LOG(LogOSMAttachment, Warning, TEXT("Attach failed: cycle detected (%d -> %d)"), InChildInstanceId, InParentInstanceId);
 		return false;
 	}
 
 	if (!Instances.Contains(InChildInstanceId) || !Instances.Contains(InParentInstanceId))
 	{
+		UE_LOG(LogOSMAttachment, Verbose, TEXT("Attach failed: instance state missing (%d -> %d)"), InChildInstanceId, InParentInstanceId);
 		return false;
 	}
 
@@ -1975,6 +1988,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::AttachInstanceInternal(
 		}
 	}
 
+	UE_LOG(LogOSMAttachment, Verbose, TEXT("Attached child %d to parent %d socket '%s'"), InChildInstanceId, InParentInstanceId, *InSocketName.ToString());
 	return true;
 }
 
@@ -1982,10 +1996,12 @@ bool UOptimizedSkeletalMeshWorldSubsystem::DetachInstanceInternal(const int32 In
 {
 	if (!ChildAttachments.Contains(InChildInstanceId))
 	{
+		UE_LOG(LogOSMAttachment, VeryVerbose, TEXT("Detach ignored: child %d is not attached"), InChildInstanceId);
 		return false;
 	}
 
 	RemoveAttachmentMapsForChild(InChildInstanceId);
+	UE_LOG(LogOSMAttachment, Verbose, TEXT("Detached child %d"), InChildInstanceId);
 	return true;
 }
 
@@ -2537,6 +2553,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::DestroyRenderBridge()
 
 void UOptimizedSkeletalMeshWorldSubsystem::RefreshCustomDepthRenderComponents()
 {
+	UE_LOG(LogOSMCustomDepth, VeryVerbose, TEXT("Refresh custom depth components"));
 	if (bExternalRenderBridgeActive)
 	{
 		for (TPair<int32, TObjectPtr<UOptimizedSkeletalMeshRenderComponent>>& pair : CustomDepthRenderComponents)
@@ -3033,6 +3050,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::ShouldTickAnimation(
 
 void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime)
 {
+	UE_LOG(LogOSMAnimation, VeryVerbose, TEXT("TickAnimation dt=%.4f active=%d dirty=%d"), InDeltaTime, ActiveAnimationInstanceIds.Num(), DirtyAnimationInstanceIds.Num());
 	FOptimizedSkeletalMeshAnimationStats newStats;
 	InitializeAnimationStats(newStats, InDeltaTime);
 	if (ActiveAnimationInstanceIds.IsEmpty() && DirtyAnimationInstanceIds.IsEmpty())
@@ -3064,6 +3082,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 
 	LastAnimationStats = newStats;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
+	UE_LOG(LogOSMPerformance, VeryVerbose, TEXT("AnimStats: registered=%d animated=%d poseEval=%d"), LastAnimationStats.RegisteredInstances, LastAnimationStats.AnimatedInstances, LastAnimationStats.PoseEvaluatedInstances);
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
@@ -3108,7 +3127,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 			if (!warnedSocketName || *warnedSocketName != attachment.ParentSocketName)
 			{
 				UE_LOG(
-					LogTemp,
+					LogOSMAttachment,
 					Warning,
 					TEXT("OSM attachment: child %d could not resolve socket '%s' on parent %d"),
 					childInstanceId,

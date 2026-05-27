@@ -1,1 +1,13 @@
-﻿#include "OptimizedSkeletalMeshLog.h"
+#include "OptimizedSkeletalMeshLog.h"
+
+DEFINE_LOG_CATEGORY(LogOptimizedSkeletalMesh);
+DEFINE_LOG_CATEGORY(LogOSMSubsystem);
+DEFINE_LOG_CATEGORY(LogOSMAnimation);
+DEFINE_LOG_CATEGORY(LogOSMRendering);
+DEFINE_LOG_CATEGORY(LogOSMAttachment);
+DEFINE_LOG_CATEGORY(LogOSMMaterial);
+DEFINE_LOG_CATEGORY(LogOSMCustomDepth);
+DEFINE_LOG_CATEGORY(LogOSMCulling);
+DEFINE_LOG_CATEGORY(LogOSMGameplay);
+DEFINE_LOG_CATEGORY(LogOSMSettings);
+DEFINE_LOG_CATEGORY(LogOSMPerformance);

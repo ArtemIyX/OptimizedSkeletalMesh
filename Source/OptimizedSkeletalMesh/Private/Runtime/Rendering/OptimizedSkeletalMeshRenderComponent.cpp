@@ -27,6 +27,7 @@
 #include "Rendering/SkinWeightVertexBuffer.h"
 #include "Rendering/SkeletalMeshLODRenderData.h"
 #include "Rendering/SkeletalMeshRenderData.h"
+#include "OptimizedSkeletalMeshLog.h"
 #include "Runtime/Manager/OptimizedSkeletalMeshWorldSubsystem.h"
 #include "SceneManagement.h"
 #include "Stats/Stats.h"
@@ -2288,6 +2289,7 @@ UOptimizedSkeletalMeshRenderComponent::UOptimizedSkeletalMeshRenderComponent(con
 	bCastDynamicShadow = true;
 	CastShadow = true;
 	bRenderCustomDepth = false;
+	UE_LOG(LogOSMRendering, VeryVerbose, TEXT("RenderComponent created"));
 }
 
 void UOptimizedSkeletalMeshRenderComponent::SetOptimizedSkeletalMeshSubsystem(
@@ -2344,6 +2346,7 @@ void UOptimizedSkeletalMeshRenderComponent::SetMaxMeshDrawInstances(const int32 
 void UOptimizedSkeletalMeshRenderComponent::SetInstanceFrustumCulling(const bool bInEnableInstanceFrustumCulling)
 {
 	bEnableInstanceFrustumCulling = bInEnableInstanceFrustumCulling;
+	UE_LOG(LogOSMCulling, Verbose, TEXT("Instance frustum culling set: %s"), bEnableInstanceFrustumCulling ? TEXT("true") : TEXT("false"));
 	RequestRenderRefresh();
 }
 

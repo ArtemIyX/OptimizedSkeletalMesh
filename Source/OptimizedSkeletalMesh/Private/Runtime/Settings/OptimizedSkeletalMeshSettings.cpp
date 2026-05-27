@@ -3,6 +3,7 @@
 #include "Runtime/Settings/OptimizedSkeletalMeshSettings.h"
 
 #include "HAL/IConsoleManager.h"
+#include "OptimizedSkeletalMeshLog.h"
 
 namespace OptimizedSkeletalMesh
 {
@@ -65,6 +66,7 @@ void UOptimizedSkeletalMeshSettings::PostInitProperties()
 	}
 
 	OptimizedSkeletalMesh::PushRenderSettingsToCVars(*this);
+	UE_LOG(LogOSMSettings, Verbose, TEXT("Applied OSM settings from config to CVars"));
 }
 
 #if WITH_EDITOR
@@ -77,6 +79,7 @@ void UOptimizedSkeletalMeshSettings::PostEditChangeProperty(FPropertyChangedEven
 	}
 
 	OptimizedSkeletalMesh::PushRenderSettingsToCVars(*this);
+	UE_LOG(LogOSMSettings, Verbose, TEXT("Applied edited OSM settings to CVars"));
 	SaveConfig();
 }
 #endif

@@ -4,6 +4,7 @@
 
 #include "Animation/AnimSequence.h"
 #include "Engine/World.h"
+#include "OptimizedSkeletalMeshLog.h"
 
 AOptimizedSkeletalMeshGameplaySpawner::AOptimizedSkeletalMeshGameplaySpawner()
 {
@@ -37,6 +38,7 @@ void AOptimizedSkeletalMeshGameplaySpawner::RebuildInstances()
 	UOptimizedSkeletalMeshWorldSubsystem* subsystem = GetSubsystem();
 	if (!subsystem || !Mesh)
 	{
+		UE_LOG(LogOSMGameplay, Verbose, TEXT("RebuildInstances skipped: subsystem or mesh missing"));
 		return;
 	}
 
@@ -68,6 +70,7 @@ void AOptimizedSkeletalMeshGameplaySpawner::RebuildInstances()
 	baseDesc.bVisible = true;
 
 	subsystem->AddInstancesBatch(baseDesc, worldTransforms, SpawnedHandles);
+	UE_LOG(LogOSMGameplay, Verbose, TEXT("Spawner built %d instances"), SpawnedHandles.Num());
 }
 
 void AOptimizedSkeletalMeshGameplaySpawner::ClearInstances()
@@ -81,6 +84,7 @@ void AOptimizedSkeletalMeshGameplaySpawner::ClearInstances()
 
 	subsystem->RemoveInstances(SpawnedHandles);
 	SpawnedHandles.Reset();
+	UE_LOG(LogOSMGameplay, Verbose, TEXT("Spawner cleared instances"));
 }
 
 FTransform AOptimizedSkeletalMeshGameplaySpawner::MakeInstanceTransform(const int32 InX, const int32 InY) const

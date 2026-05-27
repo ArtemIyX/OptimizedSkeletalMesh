@@ -1,3 +1,15 @@
-﻿#pragma once
+#pragma once
+
 #include "CoreMinimal.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogOptimizedSkeletalMesh, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMSubsystem, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMAnimation, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMRendering, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMAttachment, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMMaterial, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMCustomDepth, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMCulling, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMGameplay, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMSettings, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogOSMPerformance, Log, All);

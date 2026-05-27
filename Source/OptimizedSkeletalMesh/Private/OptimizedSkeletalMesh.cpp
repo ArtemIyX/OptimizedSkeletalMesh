@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "OptimizedSkeletalMesh.h"
+#include "OptimizedSkeletalMeshLog.h"
 
 #include "Interfaces/IPluginManager.h"
 #include "ShaderCore.h"
@@ -9,6 +10,7 @@
 
 void FOptimizedSkeletalMeshModule::StartupModule()
 {
+	UE_LOG(LogOptimizedSkeletalMesh, Log, TEXT("OptimizedSkeletalMesh module startup"));
 	const TSharedPtr<IPlugin> plugin = IPluginManager::Get().FindPlugin(TEXT("OptimizedSkeletalMesh"));
 	if (plugin.IsValid())
 	{
@@ -20,6 +22,7 @@ void FOptimizedSkeletalMeshModule::StartupModule()
 
 void FOptimizedSkeletalMeshModule::ShutdownModule()
 {
+	UE_LOG(LogOptimizedSkeletalMesh, Log, TEXT("OptimizedSkeletalMesh module shutdown"));
 }
 
 #undef LOCTEXT_NAMESPACE
