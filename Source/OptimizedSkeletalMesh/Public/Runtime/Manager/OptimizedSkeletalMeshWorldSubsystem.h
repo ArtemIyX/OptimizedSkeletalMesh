@@ -453,6 +453,8 @@ private:
 	TMap<TObjectKey<USkeletalMesh>, FOptimizedSkeletalMeshAnimationMeshCache> AnimationMeshCaches;
 	TMap<int32, TArray<FMatrix44f>> PreviousInstanceBonePalettes;
 	TMap<int32, TArray<FMatrix44f>> InstanceBonePalettes;
+	TMap<int32, FOptimizedSkeletalMeshInstanceAttachment> ChildAttachments;
+	TMultiMap<int32, int32> ParentToChildren;
 	TMap<int32, float> InstanceAnimationBlendAlphas;
 	TSet<int32> ActiveAnimationInstanceIds;
 	TSet<int32> DirtyAnimationInstanceIds;
