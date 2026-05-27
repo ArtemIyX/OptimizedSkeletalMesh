@@ -3,8 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Runtime/Data/Structs/OptimizedSkeletalMeshInstanceDesc.h"
-#include "Runtime/Data/Structs/OptimizedSkeletalMeshInstanceHandle.h"
+#include "Data/Structs/OptimizedSkeletalMeshInstanceDesc.h"
+#include "Data/Structs/OptimizedSkeletalMeshInstanceHandle.h"
 #include "OptimizedSkeletalMeshInstanceSnapshot.generated.h"
 
 USTRUCT(BlueprintType)

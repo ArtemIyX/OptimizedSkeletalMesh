@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Runtime/Data/Structs/OptimizedSkeletalMeshInstanceHandle.h"
+#include "Data/Structs/OptimizedSkeletalMeshInstanceHandle.h"
 
 struct FOptimizedSkeletalMeshBonePaletteSnapshot
 {

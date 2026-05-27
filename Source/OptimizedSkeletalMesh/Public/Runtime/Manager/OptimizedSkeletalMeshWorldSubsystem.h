@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Runtime/Manager/OptimizedSkeletalMeshTypes.h"
+#include "OptimizedSkeletalMeshTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "OptimizedSkeletalMeshWorldSubsystem.generated.h"
 
@@ -230,7 +230,19 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Query", meta = (DisplayName = "Get Instance By Id", Keywords = "instance query get state snapshot"))
 	bool GetInstanceById(int32 InInstanceId, FOptimizedSkeletalMeshInstanceDesc& OutDesc) const;
-	#pragma endregion
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Query", meta = (DisplayName = "Get Instance Socket Transform", Keywords = "instance socket transform bone gameplay"))
+	bool GetInstanceSocketTransform(
+		UPARAM(DisplayName = "Handle") FOptimizedSkeletalMeshInstanceHandle InHandle,
+		UPARAM(DisplayName = "Socket Name") FName InSocketName,
+		FTransform& OutWorldTransform) const;
+
+	UFUNCTION(BlueprintPure, Category = "Optimized Skeletal Mesh|Instance Query", meta = (DisplayName = "Get Instance Socket Transform By Id", Keywords = "instance socket transform bone gameplay"))
+	bool GetInstanceSocketTransformById(
+		UPARAM(DisplayName = "Instance Id") int32 InInstanceId,
+		UPARAM(DisplayName = "Socket Name") FName InSocketName,
+		FTransform& OutWorldTransform) const;
+#pragma endregion
 
 	#pragma region InstanceAnimation
 	UFUNCTION(BlueprintCallable, Category = "Optimized Skeletal Mesh|Instance Animation", meta = (DisplayName = "Set Instance Animation Asset", Keywords = "instance animation play pause stop loop rate time"))

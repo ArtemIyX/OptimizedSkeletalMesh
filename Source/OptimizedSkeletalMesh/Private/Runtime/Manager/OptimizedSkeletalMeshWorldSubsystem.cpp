@@ -14,6 +14,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/SkeletalMeshSocket.h"
 #include "Engine/Texture2D.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/Actor.h"
@@ -1725,6 +1726,84 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceById(
 	FOptimizedSkeletalMeshInstanceDesc& OutDesc) const
 {
 	return GetInstance(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), OutDesc);
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransform(
+	const FOptimizedSkeletalMeshInstanceHandle InHandle,
+	const FName InSocketName,
+	FTransform& OutWorldTransform) const
+{
+	const FOptimizedSkeletalMeshInstanceDesc* instance = Instances.Find(InHandle.Id);
+	if (!instance || !instance->SkeletalMesh || InSocketName.IsNone())
+	{
+		return false;
+	}
+
+	const USkeletalMeshSocket* socket = instance->SkeletalMesh->FindSocket(InSocketName);
+	if (!socket)
+	{
+		return false;
+	}
+
+	const TArray<FMatrix44f>* bonePalette = InstanceBonePalettes.Find(InHandle.Id);
+	if (!bonePalette || bonePalette->IsEmpty())
+	{
+		return false;
+	}
+
+	const FReferenceSkeleton& refSkeleton = instance->SkeletalMesh->GetRefSkeleton();
+	const int32 boneIndex = refSkeleton.FindBoneIndex(socket->BoneName);
+	if (boneIndex == INDEX_NONE || !bonePalette->IsValidIndex(boneIndex))
+	{
+		return false;
+	}
+
+	const TArray<FTransform>& refPose = refSkeleton.GetRefBonePose();
+	FTransform refComponentTransform = FTransform::Identity;
+	TArray<int32, TInlineAllocator<128>> boneChain;
+	for (int32 chainBoneIndex = boneIndex; chainBoneIndex != INDEX_NONE; chainBoneIndex = refSkeleton.GetParentIndex(chainBoneIndex))
+	{
+		boneChain.Add(chainBoneIndex);
+	}
+
+	for (int32 chainIndex = boneChain.Num() - 1; chainIndex >= 0; --chainIndex)
+	{
+		const int32 refBoneIndex = boneChain[chainIndex];
+		if (!refPose.IsValidIndex(refBoneIndex))
+		{
+			return false;
+		}
+		refComponentTransform = refPose[refBoneIndex] * refComponentTransform;
+	}
+
+	auto convertMatrix44fToMatrix = [](const FMatrix44f& InMatrix44f) -> FMatrix {
+		FMatrix outMatrix = FMatrix::Identity;
+		for (int32 row = 0; row < 4; ++row)
+		{
+			for (int32 column = 0; column < 4; ++column)
+			{
+				outMatrix.M[row][column] = static_cast<double>(InMatrix44f.M[row][column]);
+			}
+		}
+		return outMatrix;
+	};
+
+	const FMatrix refComponentMatrix = refComponentTransform.ToMatrixWithScale();
+	const FMatrix skinningMatrix = convertMatrix44fToMatrix((*bonePalette)[boneIndex]);
+	const FMatrix boneAnimatedComponentMatrix = refComponentMatrix * skinningMatrix;
+	const FTransform boneAnimatedComponentTransform = FTransform(boneAnimatedComponentMatrix);
+	const FTransform boneWorldTransform = boneAnimatedComponentTransform * instance->WorldTransform;
+
+	OutWorldTransform = socket->GetSocketLocalTransform() * boneWorldTransform;
+	return true;
+}
+
+bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransformById(
+	const int32 InInstanceId,
+	const FName InSocketName,
+	FTransform& OutWorldTransform) const
+{
+	return GetInstanceSocketTransform(FOptimizedSkeletalMeshInstanceHandle(InInstanceId), InSocketName, OutWorldTransform);
 }
 
 bool UOptimizedSkeletalMeshWorldSubsystem::SetInstanceAnimationAsset(

@@ -3,8 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Runtime/Data/Structs/OptimizedSkeletalMeshAnimationMeshCache.h"
-#include "Runtime/Data/Structs/OptimizedSkeletalMeshInstanceDesc.h"
+#include "Data/Structs/OptimizedSkeletalMeshAnimationMeshCache.h"
+#include "Data/Structs/OptimizedSkeletalMeshInstanceDesc.h"
 
 struct FOptimizedSkeletalMeshAnimationEvaluationWork
 {
