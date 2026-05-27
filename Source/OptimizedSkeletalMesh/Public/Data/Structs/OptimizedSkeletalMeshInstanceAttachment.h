@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Data/Enums/OptimizedSkeletalMeshAttachmentFollowMode.h"
+#include "Data/Enums/OptimizedSkeletalMeshAttachmentSpaceMode.h"
 #include "Data/Structs/OptimizedSkeletalMeshInstanceHandle.h"
 #include "OptimizedSkeletalMeshInstanceAttachment.generated.h"
 
@@ -17,10 +18,10 @@ struct OPTIMIZEDSKELETALMESH_API FOptimizedSkeletalMeshInstanceAttachment
 		EOptimizedSkeletalMeshAttachmentFollowMode::Location | EOptimizedSkeletalMeshAttachmentFollowMode::Rotation);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Attachment")
-	FTransform RelativeOffset = FTransform::Identity;
+	EOptimizedSkeletalMeshAttachmentSpaceMode SpaceMode = EOptimizedSkeletalMeshAttachmentSpaceMode::Socket;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Attachment")
-	bool bSnapToTarget = true;
+	FTransform RelativeOffset = FTransform::Identity;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimized Skeletal Mesh|Attachment")
 	bool bEnabled = true;

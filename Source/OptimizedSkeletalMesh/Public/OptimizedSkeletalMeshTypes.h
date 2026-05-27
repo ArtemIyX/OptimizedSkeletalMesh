@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Data/Enums/OptimizedSkeletalMeshAttachmentFollowMode.h"
+#include "Data/Enums/OptimizedSkeletalMeshAttachmentSpaceMode.h"
 #include "Data/Structs/OptimizedSkeletalMeshAnimationMeshCache.h"
 #include "Data/Structs/OptimizedSkeletalMeshAnimationEvaluationResult.h"
 #include "Data/Structs/OptimizedSkeletalMeshAnimationEvaluationWork.h"

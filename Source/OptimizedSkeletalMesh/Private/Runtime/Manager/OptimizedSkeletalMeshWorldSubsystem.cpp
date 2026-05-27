@@ -1973,7 +1973,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::AttachInstanceInternal(
 	ChildAttachmentRuntimeData.Add(InChildInstanceId, runtimeData);
 	ParentToChildren.Add(InParentInstanceId, InChildInstanceId);
 
-	if ((bInSnapNow || attachment.bSnapToTarget) && attachment.bEnabled)
+	if (bInSnapNow && attachment.bEnabled)
 	{
 		FTransform socketWorldTransform = FTransform::Identity;
 		if (GetInstanceSocketTransform(FOptimizedSkeletalMeshInstanceHandle(InParentInstanceId), InSocketName, socketWorldTransform))
@@ -3130,7 +3130,53 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 		}
 
 		FTransform parentSocketWorldTransform = FTransform::Identity;
-		if (!GetInstanceSocketTransform(FOptimizedSkeletalMeshInstanceHandle(parentInstanceId), runtimeData->ParentSocketName, parentSocketWorldTransform))
+		bool bResolvedParentAnchor = false;
+		if (attachment.SpaceMode == EOptimizedSkeletalMeshAttachmentSpaceMode::MeshOrigin)
+		{
+			parentSocketWorldTransform = parentDesc->WorldTransform;
+			bResolvedParentAnchor = true;
+		}
+		else if (attachment.SpaceMode == EOptimizedSkeletalMeshAttachmentSpaceMode::Bone)
+		{
+			const TArray<FMatrix44f>* parentBonePalette = InstanceBonePalettes.Find(parentInstanceId);
+			if (parentBonePalette && parentDesc->SkeletalMesh)
+			{
+				const FReferenceSkeleton& refSkeleton = parentDesc->SkeletalMesh->GetRefSkeleton();
+				const int32 boneIndex = refSkeleton.FindBoneIndex(runtimeData->ParentSocketName);
+				if (boneIndex != INDEX_NONE && parentBonePalette->IsValidIndex(boneIndex))
+				{
+					const TArray<FTransform>& refPose = refSkeleton.GetRefBonePose();
+					FTransform3f refComponentTransform = FTransform3f::Identity;
+					bool bValidRefChain = true;
+					for (int32 refBoneIndex = boneIndex; refBoneIndex != INDEX_NONE; refBoneIndex = refSkeleton.GetParentIndex(refBoneIndex))
+					{
+						if (!refPose.IsValidIndex(refBoneIndex))
+						{
+							bValidRefChain = false;
+							break;
+						}
+						refComponentTransform = refComponentTransform * FTransform3f(refPose[refBoneIndex]);
+					}
+
+					if (bValidRefChain)
+					{
+						const FTransform3f skinningTransform((*parentBonePalette)[boneIndex]);
+						const FTransform3f boneAnimatedComponentTransform = skinningTransform * refComponentTransform;
+						parentSocketWorldTransform = FTransform(boneAnimatedComponentTransform) * parentDesc->WorldTransform;
+						bResolvedParentAnchor = true;
+					}
+				}
+			}
+		}
+		else
+		{
+			bResolvedParentAnchor = GetInstanceSocketTransform(
+				FOptimizedSkeletalMeshInstanceHandle(parentInstanceId),
+				runtimeData->ParentSocketName,
+				parentSocketWorldTransform);
+		}
+
+		if (!bResolvedParentAnchor)
 		{
 			const FName* warnedSocketName = AttachmentMissingSocketWarnings.Find(childInstanceId);
 			if (!warnedSocketName || *warnedSocketName != runtimeData->ParentSocketName)
@@ -3138,7 +3184,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 				UE_LOG(
 					LogOSMAttachment,
 					Warning,
-					TEXT("OSM attachment: child %d could not resolve socket '%s' on parent %d"),
+					TEXT("OSM attachment: child %d could not resolve anchor '%s' on parent %d"),
 					childInstanceId,
 					*runtimeData->ParentSocketName.ToString(),
 					parentInstanceId);
