@@ -457,6 +457,7 @@ private:
 
 	#pragma region Animation
 	void TickAnimation(float InDeltaTime);
+	void TickAttachments(float InDeltaTime);
 	void InitializeAnimationStats(FOptimizedSkeletalMeshAnimationStats& OutStats, float InDeltaTime) const;
 	void FinalizeAnimationStats(FOptimizedSkeletalMeshAnimationStats& OutStats) const;
 	void BuildAnimationInstanceIdsToProcess(TArray<int32>& OutInstanceIdsToProcess, TArray<int32>& OutDirtyInstanceIdsToProcess) const;

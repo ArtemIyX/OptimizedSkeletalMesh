@@ -690,6 +690,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 	}
 
 	TickAnimation(InDeltaTime);
+	TickAttachments(InDeltaTime);
 	if (bRenderDataDirty || bCustomDepthRenderDataDirty)
 	{
 		RefreshCustomDepthRenderComponents();
@@ -739,6 +740,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::IsTickable() const
 			|| bCustomDepthRenderDataDirty
 			|| HasDirtyTransforms()
 			|| HasDirtyRenderVisibleBonePalettes()
+			|| !ChildAttachments.IsEmpty()
 			|| !ActiveAnimationInstanceIds.IsEmpty()
 			|| !DirtyAnimationInstanceIds.IsEmpty());
 }
@@ -3048,6 +3050,81 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 
 	LastAnimationStats = newStats;
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
+}
+
+void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments(float InDeltaTime)
+{
+	if (ChildAttachments.IsEmpty())
+	{
+		return;
+	}
+
+	TArray<int32> invalidChildren;
+	invalidChildren.Reserve(8);
+
+	for (const TPair<int32, FOptimizedSkeletalMeshInstanceAttachment>& pair : ChildAttachments)
+	{
+		const int32 childInstanceId = pair.Key;
+		const FOptimizedSkeletalMeshInstanceAttachment& attachment = pair.Value;
+		if (!attachment.bEnabled)
+		{
+			continue;
+		}
+
+		FOptimizedSkeletalMeshInstanceDesc* childDesc = Instances.Find(childInstanceId);
+		if (!childDesc)
+		{
+			invalidChildren.Add(childInstanceId);
+			continue;
+		}
+
+		const int32 parentInstanceId = attachment.ParentHandle.Id;
+		const FOptimizedSkeletalMeshInstanceDesc* parentDesc = Instances.Find(parentInstanceId);
+		if (!parentDesc)
+		{
+			invalidChildren.Add(childInstanceId);
+			continue;
+		}
+
+		FTransform parentSocketWorldTransform = FTransform::Identity;
+		if (!GetInstanceSocketTransform(attachment.ParentHandle, attachment.ParentSocketName, parentSocketWorldTransform))
+		{
+			continue;
+		}
+
+		const FTransform attachedWorldTransform = attachment.RelativeOffset * parentSocketWorldTransform;
+		FTransform targetWorldTransform = childDesc->WorldTransform;
+
+		const bool bFollowLocation =
+			(attachment.FollowModeMask & static_cast<int32>(EOptimizedSkeletalMeshAttachmentFollowMode::Location)) != 0;
+		const bool bFollowRotation =
+			(attachment.FollowModeMask & static_cast<int32>(EOptimizedSkeletalMeshAttachmentFollowMode::Rotation)) != 0;
+		const bool bFollowScale =
+			(attachment.FollowModeMask & static_cast<int32>(EOptimizedSkeletalMeshAttachmentFollowMode::Scale)) != 0;
+
+		if (bFollowLocation)
+		{
+			targetWorldTransform.SetLocation(attachedWorldTransform.GetLocation());
+		}
+		if (bFollowRotation)
+		{
+			targetWorldTransform.SetRotation(attachedWorldTransform.GetRotation());
+		}
+		if (bFollowScale)
+		{
+			targetWorldTransform.SetScale3D(attachedWorldTransform.GetScale3D());
+		}
+
+		if (!targetWorldTransform.Equals(childDesc->WorldTransform))
+		{
+			UpdateInstanceTransform(FOptimizedSkeletalMeshInstanceHandle(childInstanceId), targetWorldTransform);
+		}
+	}
+
+	for (const int32 childId : invalidChildren)
+	{
+		RemoveAttachmentMapsForChild(childId);
+	}
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::InitializeAnimationStats(
