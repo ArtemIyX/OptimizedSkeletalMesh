@@ -457,7 +457,7 @@ private:
 
 	#pragma region Animation
 	void TickAnimation(float InDeltaTime);
-	void TickAttachments(float InDeltaTime);
+	void TickAttachments();
 	void InitializeAnimationStats(FOptimizedSkeletalMeshAnimationStats& OutStats, float InDeltaTime) const;
 	void FinalizeAnimationStats(FOptimizedSkeletalMeshAnimationStats& OutStats) const;
 	void BuildAnimationInstanceIdsToProcess(TArray<int32>& OutInstanceIdsToProcess, TArray<int32>& OutDirtyInstanceIdsToProcess) const;
@@ -522,6 +522,7 @@ private:
 	TMap<int32, TArray<FMatrix44f>> InstanceBonePalettes;
 	TMap<int32, FOptimizedSkeletalMeshInstanceAttachment> ChildAttachments;
 	TMultiMap<int32, int32> ParentToChildren;
+	TMap<int32, FName> AttachmentMissingSocketWarnings;
 	TMap<int32, float> InstanceAnimationBlendAlphas;
 	TSet<int32> ActiveAnimationInstanceIds;
 	TSet<int32> DirtyAnimationInstanceIds;

@@ -608,6 +608,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Initialize(FSubsystemCollectionBase& 
 	NextNamedMaterialParamSlot = 0;
 	ExternalRenderComponents.Reset();
 	CustomDepthRenderComponents.Reset();
+	AttachmentMissingSocketWarnings.Reset();
 	NextInstanceId = 1;
 	LastSeenRenderCVarVersion = OptimizedSkeletalMesh::GetRenderCVarChangeVersion();
 	RenderStateRecoveryAttempts = 0;
@@ -690,7 +691,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::Tick(float InDeltaTime)
 	}
 
 	TickAnimation(InDeltaTime);
-	TickAttachments(InDeltaTime);
+	TickAttachments();
 	if (bRenderDataDirty || bCustomDepthRenderDataDirty)
 	{
 		RefreshCustomDepthRenderComponents();
@@ -2004,6 +2005,8 @@ bool UOptimizedSkeletalMeshWorldSubsystem::WouldCreateAttachmentCycle(
 
 void UOptimizedSkeletalMeshWorldSubsystem::RemoveAttachmentMapsForChild(const int32 InChildInstanceId)
 {
+	AttachmentMissingSocketWarnings.Remove(InChildInstanceId);
+
 	FOptimizedSkeletalMeshInstanceAttachment existingAttachment;
 	if (!ChildAttachments.RemoveAndCopyValue(InChildInstanceId, existingAttachment))
 	{
@@ -2019,6 +2022,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::RemoveAttachmentMapsForParent(const i
 	ParentToChildren.MultiFind(InParentInstanceId, childIds);
 	for (const int32 childId : childIds)
 	{
+		AttachmentMissingSocketWarnings.Remove(childId);
 		ChildAttachments.Remove(childId);
 	}
 	ParentToChildren.Remove(InParentInstanceId);
@@ -3052,7 +3056,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAnimation(const float InDeltaTime
 	OptimizedSkeletalMesh::PublishAnimationStats(LastAnimationStats);
 }
 
-void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments(float InDeltaTime)
+void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 {
 	if (ChildAttachments.IsEmpty())
 	{
@@ -3089,8 +3093,21 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments(float InDeltaTime)
 		FTransform parentSocketWorldTransform = FTransform::Identity;
 		if (!GetInstanceSocketTransform(attachment.ParentHandle, attachment.ParentSocketName, parentSocketWorldTransform))
 		{
+			const FName* warnedSocketName = AttachmentMissingSocketWarnings.Find(childInstanceId);
+			if (!warnedSocketName || *warnedSocketName != attachment.ParentSocketName)
+			{
+				UE_LOG(
+					LogTemp,
+					Warning,
+					TEXT("OSM attachment: child %d could not resolve socket '%s' on parent %d"),
+					childInstanceId,
+					*attachment.ParentSocketName.ToString(),
+					parentInstanceId);
+				AttachmentMissingSocketWarnings.Add(childInstanceId, attachment.ParentSocketName);
+			}
 			continue;
 		}
+		AttachmentMissingSocketWarnings.Remove(childInstanceId);
 
 		const FTransform attachedWorldTransform = attachment.RelativeOffset * parentSocketWorldTransform;
 		FTransform targetWorldTransform = childDesc->WorldTransform;
