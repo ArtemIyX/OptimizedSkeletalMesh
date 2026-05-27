@@ -16,6 +16,12 @@ class AActor;
 class AOptimizedSkeletalMeshRenderBridgeActor;
 class UOptimizedSkeletalMeshRenderComponent;
 
+struct FOptimizedSkeletalMeshAttachmentRuntimeData
+{
+	int32 ParentInstanceId = INDEX_NONE;
+	FName ParentSocketName = NAME_None;
+};
+
 UCLASS()
 class OPTIMIZEDSKELETALMESH_API UOptimizedSkeletalMeshWorldSubsystem : public UTickableWorldSubsystem
 {
@@ -521,6 +527,7 @@ private:
 	TMap<int32, TArray<FMatrix44f>> PreviousInstanceBonePalettes;
 	TMap<int32, TArray<FMatrix44f>> InstanceBonePalettes;
 	TMap<int32, FOptimizedSkeletalMeshInstanceAttachment> ChildAttachments;
+	TMap<int32, FOptimizedSkeletalMeshAttachmentRuntimeData> ChildAttachmentRuntimeData;
 	TMultiMap<int32, int32> ParentToChildren;
 	TMap<int32, FName> AttachmentMissingSocketWarnings;
 	mutable TMap<TObjectKey<USkeletalMesh>, TMap<FName, int32>> SocketBoneIndexCache;

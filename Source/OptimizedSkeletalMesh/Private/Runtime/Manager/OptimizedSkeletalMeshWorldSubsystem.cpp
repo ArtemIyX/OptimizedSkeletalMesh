@@ -1863,11 +1863,7 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransform(
 	}
 
 	const USkeletalMeshSocket* socket = instance->SkeletalMesh->FindSocket(InSocketName);
-	if (!socket)
-	{
-		UE_LOG(LogOSMAttachment, VeryVerbose, TEXT("Socket '%s' not found for instance %d"), *InSocketName.ToString(), InHandle.Id);
-		return false;
-	}
+	const bool bUseSocketFallbackToBone = (socket == nullptr);
 
 	const TArray<FMatrix44f>* bonePalette = InstanceBonePalettes.Find(InHandle.Id);
 	if (!bonePalette || bonePalette->IsEmpty())
@@ -1890,44 +1886,41 @@ bool UOptimizedSkeletalMeshWorldSubsystem::GetInstanceSocketTransform(
 
 	if (!bHasCachedBoneIndex)
 	{
-		boneIndex = refSkeleton.FindBoneIndex(socket->BoneName);
+		const FName sourceBoneName = bUseSocketFallbackToBone ? InSocketName : socket->BoneName;
+		boneIndex = refSkeleton.FindBoneIndex(sourceBoneName);
 		SocketBoneIndexCache.FindOrAdd(meshKey).Add(InSocketName, boneIndex);
 	}
 
 	if (boneIndex == INDEX_NONE || !bonePalette->IsValidIndex(boneIndex))
 	{
+		if (bUseSocketFallbackToBone)
+		{
+			UE_LOG(LogOSMAttachment, VeryVerbose, TEXT("Socket/Bone '%s' not found for instance %d"), *InSocketName.ToString(), InHandle.Id);
+		}
+		else
+		{
+			UE_LOG(LogOSMAttachment, VeryVerbose, TEXT("Socket '%s' resolved bone is invalid for instance %d"), *InSocketName.ToString(), InHandle.Id);
+		}
 		return false;
 	}
 
 	const TArray<FTransform>& refPose = refSkeleton.GetRefBonePose();
-	FMatrix refComponentMatrix = FMatrix::Identity;
+	FTransform3f refComponentTransform = FTransform3f::Identity;
 	for (int32 refBoneIndex = boneIndex; refBoneIndex != INDEX_NONE; refBoneIndex = refSkeleton.GetParentIndex(refBoneIndex))
 	{
 		if (!refPose.IsValidIndex(refBoneIndex))
 		{
 			return false;
 		}
-		refComponentMatrix = refPose[refBoneIndex].ToMatrixWithScale() * refComponentMatrix;
+		refComponentTransform = refComponentTransform * FTransform3f(refPose[refBoneIndex]);
 	}
 
-	auto convertMatrix44fToMatrix = [](const FMatrix44f& InMatrix44f) -> FMatrix {
-		FMatrix outMatrix = FMatrix::Identity;
-		for (int32 row = 0; row < 4; ++row)
-		{
-			for (int32 column = 0; column < 4; ++column)
-			{
-				outMatrix.M[row][column] = static_cast<double>(InMatrix44f.M[row][column]);
-			}
-		}
-		return outMatrix;
-	};
+	const FTransform3f skinningTransform((*bonePalette)[boneIndex]);
+	const FTransform3f boneAnimatedComponentTransform = skinningTransform * refComponentTransform;
+	const FTransform boneWorldTransform = FTransform(boneAnimatedComponentTransform) * instance->WorldTransform;
 
-	const FMatrix skinningMatrix = convertMatrix44fToMatrix((*bonePalette)[boneIndex]);
-	const FMatrix boneAnimatedComponentMatrix = refComponentMatrix * skinningMatrix;
-	const FTransform boneAnimatedComponentTransform = FTransform(boneAnimatedComponentMatrix);
-	const FTransform boneWorldTransform = boneAnimatedComponentTransform * instance->WorldTransform;
-
-	OutWorldTransform = socket->GetSocketLocalTransform() * boneWorldTransform;
+	const FTransform socketLocalTransform = bUseSocketFallbackToBone ? FTransform::Identity : socket->GetSocketLocalTransform();
+	OutWorldTransform = socketLocalTransform * boneWorldTransform;
 	return true;
 }
 
@@ -1973,12 +1966,14 @@ bool UOptimizedSkeletalMeshWorldSubsystem::AttachInstanceInternal(
 	RemoveAttachmentMapsForChild(InChildInstanceId);
 
 	FOptimizedSkeletalMeshInstanceAttachment attachment = InAttachment;
-	attachment.ParentHandle = FOptimizedSkeletalMeshInstanceHandle(InParentInstanceId);
-	attachment.ParentSocketName = InSocketName;
 	ChildAttachments.Add(InChildInstanceId, attachment);
+	FOptimizedSkeletalMeshAttachmentRuntimeData runtimeData;
+	runtimeData.ParentInstanceId = InParentInstanceId;
+	runtimeData.ParentSocketName = InSocketName;
+	ChildAttachmentRuntimeData.Add(InChildInstanceId, runtimeData);
 	ParentToChildren.Add(InParentInstanceId, InChildInstanceId);
 
-	if (bInSnapNow && attachment.bEnabled)
+	if ((bInSnapNow || attachment.bSnapToTarget) && attachment.bEnabled)
 	{
 		FTransform socketWorldTransform = FTransform::Identity;
 		if (GetInstanceSocketTransform(FOptimizedSkeletalMeshInstanceHandle(InParentInstanceId), InSocketName, socketWorldTransform))
@@ -2017,13 +2012,13 @@ bool UOptimizedSkeletalMeshWorldSubsystem::WouldCreateAttachmentCycle(
 			return true;
 		}
 
-		const FOptimizedSkeletalMeshInstanceAttachment* parentAttachment = ChildAttachments.Find(currentParent);
-		if (!parentAttachment || !parentAttachment->ParentHandle.IsValid())
+		const FOptimizedSkeletalMeshAttachmentRuntimeData* parentAttachment = ChildAttachmentRuntimeData.Find(currentParent);
+		if (!parentAttachment || parentAttachment->ParentInstanceId == INDEX_NONE)
 		{
 			break;
 		}
 
-		currentParent = parentAttachment->ParentHandle.Id;
+		currentParent = parentAttachment->ParentInstanceId;
 	}
 
 	return false;
@@ -2033,13 +2028,17 @@ void UOptimizedSkeletalMeshWorldSubsystem::RemoveAttachmentMapsForChild(const in
 {
 	AttachmentMissingSocketWarnings.Remove(InChildInstanceId);
 
-	FOptimizedSkeletalMeshInstanceAttachment existingAttachment;
-	if (!ChildAttachments.RemoveAndCopyValue(InChildInstanceId, existingAttachment))
+	if (!ChildAttachments.Contains(InChildInstanceId))
 	{
 		return;
 	}
+	ChildAttachments.Remove(InChildInstanceId);
 
-	ParentToChildren.RemoveSingle(existingAttachment.ParentHandle.Id, InChildInstanceId);
+	FOptimizedSkeletalMeshAttachmentRuntimeData existingRuntimeData;
+	if (ChildAttachmentRuntimeData.RemoveAndCopyValue(InChildInstanceId, existingRuntimeData))
+	{
+		ParentToChildren.RemoveSingle(existingRuntimeData.ParentInstanceId, InChildInstanceId);
+	}
 }
 
 void UOptimizedSkeletalMeshWorldSubsystem::RemoveAttachmentMapsForParent(const int32 InParentInstanceId)
@@ -2049,6 +2048,7 @@ void UOptimizedSkeletalMeshWorldSubsystem::RemoveAttachmentMapsForParent(const i
 	for (const int32 childId : childIds)
 	{
 		AttachmentMissingSocketWarnings.Remove(childId);
+		ChildAttachmentRuntimeData.Remove(childId);
 		ChildAttachments.Remove(childId);
 	}
 	ParentToChildren.Remove(InParentInstanceId);
@@ -3096,6 +3096,13 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 	{
 		const int32 childInstanceId = it.Key();
 		const FOptimizedSkeletalMeshInstanceAttachment& attachment = it.Value();
+		const FOptimizedSkeletalMeshAttachmentRuntimeData* runtimeData = ChildAttachmentRuntimeData.Find(childInstanceId);
+		if (!runtimeData)
+		{
+			AttachmentMissingSocketWarnings.Remove(childInstanceId);
+			it.RemoveCurrent();
+			continue;
+		}
 		if (!attachment.bEnabled)
 		{
 			continue;
@@ -3104,36 +3111,38 @@ void UOptimizedSkeletalMeshWorldSubsystem::TickAttachments()
 		FOptimizedSkeletalMeshInstanceDesc* childDesc = Instances.Find(childInstanceId);
 		if (!childDesc)
 		{
-			ParentToChildren.RemoveSingle(attachment.ParentHandle.Id, childInstanceId);
+			ParentToChildren.RemoveSingle(runtimeData->ParentInstanceId, childInstanceId);
+			ChildAttachmentRuntimeData.Remove(childInstanceId);
 			AttachmentMissingSocketWarnings.Remove(childInstanceId);
 			it.RemoveCurrent();
 			continue;
 		}
 
-		const int32 parentInstanceId = attachment.ParentHandle.Id;
+		const int32 parentInstanceId = runtimeData->ParentInstanceId;
 		const FOptimizedSkeletalMeshInstanceDesc* parentDesc = Instances.Find(parentInstanceId);
 		if (!parentDesc)
 		{
-			ParentToChildren.RemoveSingle(attachment.ParentHandle.Id, childInstanceId);
+			ParentToChildren.RemoveSingle(runtimeData->ParentInstanceId, childInstanceId);
+			ChildAttachmentRuntimeData.Remove(childInstanceId);
 			AttachmentMissingSocketWarnings.Remove(childInstanceId);
 			it.RemoveCurrent();
 			continue;
 		}
 
 		FTransform parentSocketWorldTransform = FTransform::Identity;
-		if (!GetInstanceSocketTransform(attachment.ParentHandle, attachment.ParentSocketName, parentSocketWorldTransform))
+		if (!GetInstanceSocketTransform(FOptimizedSkeletalMeshInstanceHandle(parentInstanceId), runtimeData->ParentSocketName, parentSocketWorldTransform))
 		{
 			const FName* warnedSocketName = AttachmentMissingSocketWarnings.Find(childInstanceId);
-			if (!warnedSocketName || *warnedSocketName != attachment.ParentSocketName)
+			if (!warnedSocketName || *warnedSocketName != runtimeData->ParentSocketName)
 			{
 				UE_LOG(
 					LogOSMAttachment,
 					Warning,
 					TEXT("OSM attachment: child %d could not resolve socket '%s' on parent %d"),
 					childInstanceId,
-					*attachment.ParentSocketName.ToString(),
+					*runtimeData->ParentSocketName.ToString(),
 					parentInstanceId);
-				AttachmentMissingSocketWarnings.Add(childInstanceId, attachment.ParentSocketName);
+				AttachmentMissingSocketWarnings.Add(childInstanceId, runtimeData->ParentSocketName);
 			}
 			continue;
 		}
